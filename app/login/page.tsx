@@ -33,9 +33,13 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col items-center justify-center py-2">
-      <main className="flex flex-col items-center justify-center w-full flex-1 px-4 sm:px-20 text-center">
-        <h1 className="text-4xl font-extrabold mb-6 tracking-tight">Shop Owner Login</h1>
+    <div className="min-h-screen bg-white font-sans text-slate-900 flex flex-col items-center justify-center py-2 relative overflow-hidden">
+      {/* Background decorations */}
+      <div className="absolute -top-24 -right-24 h-80 w-80 rounded-full bg-yellow-100/50 blur-3xl opacity-60 pointer-events-none" />
+      <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-yellow-50/50 blur-3xl opacity-60 pointer-events-none" />
+
+      <main className="relative z-10 flex flex-col items-center justify-center w-full flex-1 px-4 sm:px-20 text-center">
+        <h1 className="text-4xl font-extrabold mb-6 tracking-tight text-slate-950">Shop Owner Login</h1>
         
         <form onSubmit={handleLogin} className="flex flex-col space-y-4 w-full max-w-sm bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
           {error && <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm mb-2">{error}</div>}
@@ -45,7 +49,7 @@ export default function LoginPage() {
             placeholder="Email" 
             value={email} 
             onChange={(e) => setEmail(e.target.value)} 
-            className="p-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900" 
+            className="p-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400" 
             required
           />
           <input 
@@ -53,13 +57,13 @@ export default function LoginPage() {
             placeholder="Password" 
             value={password} 
             onChange={(e) => setPassword(e.target.value)} 
-            className="p-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900" 
+            className="p-3 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400" 
             required
           />
           <button 
             type="submit" 
             disabled={loading}
-            className="bg-slate-900 text-white font-medium p-3 rounded-xl hover:bg-slate-800 transition-colors disabled:opacity-50 flex justify-center items-center"
+            className="bg-yellow-400 text-black font-bold p-3 rounded-xl hover:bg-yellow-500 transition-colors disabled:opacity-50 flex justify-center items-center cursor-pointer"
           >
             {loading ? 'Logging in...' : 'Login'}
           </button>
@@ -67,9 +71,9 @@ export default function LoginPage() {
         
         <div className="mt-6 flex flex-col items-center space-y-4">
            <p className="text-sm text-slate-600">
-             Don't have an account? <Link href="/signup" className="text-slate-900 font-semibold hover:underline">Register your shop</Link>
+             Don't have an account? <Link href="/signup" className="text-yellow-600 font-semibold hover:text-yellow-700 hover:underline">Register your shop</Link>
            </p>
-          <Link href="/" className="text-sm text-slate-500 hover:text-slate-900">← Back to Home</Link>
+          <Link href="/" className="text-sm text-slate-500 hover:text-yellow-600 transition-colors">← Back to Home</Link>
         </div>
       </main>
     </div>
