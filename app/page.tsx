@@ -13,15 +13,16 @@ export default function Home() {
 
   useEffect(() => {
     // Check for current session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-      
-      // If we are already logged in (or just came back from an email link), 
-      // instantly redirect to dashboard automatically
-      if (session) {
-        router.push('/dashboard');
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        supabase.auth.signOut().catch(() => {});
+        setSession(null);
+      } else {
+        setSession(session);
       }
+      setLoading(false);
+    }).catch(() => {
+      setLoading(false);
     });
 
     // Listen for auth state changes (e.g., when the magic link in email is clicked)
@@ -29,6 +30,8 @@ export default function Home() {
       (event, session) => {
         if (event === 'SIGNED_IN' && session) {
           router.push('/dashboard');
+        } else if (event === 'SIGNED_OUT') {
+          setSession(null);
         }
       }
     );
@@ -61,10 +64,22 @@ export default function Home() {
           </span>
         </div>
 
-        {/* Right: Admin Login Link */}
-        <Link href="/admin" className="text-sm md:text-base font-bold text-slate-600 hover:text-yellow-500 transition-colors">
-          Admin Login
-        </Link>
+        {/* Right: Admin Login & Contact Admin Buttons */}
+        <div className="flex items-center space-x-2.5">
+          <Link 
+            href="/contact-admin" 
+            className="px-4 py-2.5 text-xs md:text-sm font-extrabold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-xl transition-all shadow-xs"
+          >
+            Contact Admin
+          </Link>
+          <Link 
+            href="/admin" 
+            className="px-4 py-2.5 text-xs md:text-sm font-extrabold text-black bg-yellow-400 hover:bg-yellow-500 rounded-xl transition-all shadow-xs flex items-center space-x-1.5"
+          >
+            <span>Admin Login</span>
+            <Shield className="w-3.5 h-3.5" />
+          </Link>
+        </div>
       </nav>
 
       {/* Main Hero Content */}
@@ -89,10 +104,17 @@ export default function Home() {
 
         {/* Action Button */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 w-full mb-8">
-          <Link href="/login" className="group flex items-center justify-center space-x-2 w-full sm:w-auto px-6 py-3 bg-yellow-400 text-black rounded-xl font-bold hover:bg-yellow-500 transition-all shadow-sm">
-            <span>Log in to your shop</span>
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </Link>
+          {session ? (
+            <Link href="/dashboard" className="group flex items-center justify-center space-x-2 w-full sm:w-auto px-6 py-3 bg-yellow-400 text-black rounded-xl font-bold hover:bg-yellow-500 transition-all shadow-sm">
+              <span>Go to your Dashboard</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          ) : (
+            <Link href="/login" className="group flex items-center justify-center space-x-2 w-full sm:w-auto px-6 py-3 bg-yellow-400 text-black rounded-xl font-bold hover:bg-yellow-500 transition-all shadow-sm">
+              <span>Log in to your shop</span>
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          )}
         </div>
 
         {/* Feature Cards Grid */}
@@ -119,17 +141,21 @@ export default function Home() {
       <footer className="relative z-10 w-full py-4 text-center border-t border-slate-100 bg-white/80 backdrop-blur-sm select-none">
         <p className="text-xs md:text-sm text-slate-500 font-medium">
           Founded by -{' '}
-          <Link href="#" className="text-slate-800 hover:text-yellow-600 hover:underline font-bold transition-colors">
+          <a href="https://www.linkedin.com/in/omkar-varpe-9704742a9/" target="_blank" rel="noopener noreferrer" className="text-slate-800 hover:text-yellow-600 hover:underline font-bold transition-colors">
             Omkar Varpe
-          </Link>
+          </a>
           ,{' '}
-          <Link href="#" className="text-slate-800 hover:text-yellow-600 hover:underline font-bold transition-colors">
+          <a href="https://www.linkedin.com/in/pradeep-biswas-developer/" target="_blank" rel="noopener noreferrer" className="text-slate-800 hover:text-yellow-600 hover:underline font-bold transition-colors">
             Pradeep Biswas
-          </Link>
+          </a>
           ,{' '}
-          <Link href="#" className="text-slate-800 hover:text-yellow-600 hover:underline font-bold transition-colors">
-            Yajan Metha
-          </Link>
+          <a href="https://www.linkedin.com/in/yajan-mehta-9220442b2/" target="_blank" rel="noopener noreferrer" className="text-slate-800 hover:text-yellow-600 hover:underline font-bold transition-colors">
+            Yajan Mehta
+          </a>
+          ,{' '}
+          <a href="https://www.linkedin.com/in/siddhant-deshmukh-0aa485344/" target="_blank" rel="noopener noreferrer" className="text-slate-800 hover:text-yellow-600 hover:underline font-bold transition-colors">
+            Siddhant Deshmukh
+          </a>
           .
         </p>
       </footer>

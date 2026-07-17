@@ -1,8 +1,9 @@
 'use client';
 import { useState, use, useEffect } from 'react';
-import { UploadCloud, FileText, CheckCircle, Star, X } from 'lucide-react';
+import { UploadCloud, FileText, CheckCircle, Star, X, Layers } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
+import { PDFDocument } from 'pdf-lib';
 
 const XeroxLogoSVG = () => (
   <svg viewBox="0 0 100 100" className="w-12 h-12 text-slate-800" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -38,6 +39,13 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
   const [totalCost, setTotalCost] = useState(0);
   const [logo, setLogo] = useState('');
 
+  // PDF Page Counting & Page Selection States
+  const [pdfPageCount, setPdfPageCount] = useState<number | null>(null);
+  const [pageSelectionMode, setPageSelectionMode] = useState<'all' | 'range' | 'custom'>('all');
+  const [fromPage, setFromPage] = useState<number>(1);
+  const [toPage, setToPage] = useState<number>(1);
+  const [customPagesInput, setCustomPagesInput] = useState<string>('');
+
   // Custom addons state
   interface Addon {
     id: string;
@@ -46,6 +54,16 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
   }
   const [addons, setAddons] = useState<Addon[]>([]);
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+
+  // Bulk Pricing Rules State
+  interface BulkPriceRule {
+    id: string;
+    minPages: number;
+    printType: string;
+    pricePerPage: number;
+  }
+  const [bulkPrices, setBulkPrices] = useState<BulkPriceRule[]>([]);
+  const [appliedBulkRate, setAppliedBulkRate] = useState<number | null>(null);
 
   // Review states
   const [isReviewOpen, setIsReviewOpen] = useState(false);
@@ -68,9 +86,12 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
   useEffect(() => {
     // Log the user in anonymously if they aren't already, so they bypass upload RLS
     const initAnonAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        await supabase.auth.signInAnonymously();
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session) {
+        if (error) {
+          await supabase.auth.signOut().catch(() => {});
+        }
+        await supabase.auth.signInAnonymously().catch(() => {});
       }
     };
     initAnonAuth();
@@ -101,25 +122,121 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
         ];
         setAddons(defaults);
       }
+
+      const storedBulk = localStorage.getItem(`xeroxflow_bulk_prices_${resolvedParams.shopId}`);
+      if (storedBulk) {
+        try {
+          setBulkPrices(JSON.parse(storedBulk));
+        } catch (e) {}
+      }
     }
   }, [resolvedParams.shopId]);
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0] || null;
+    setFile(selectedFile);
+    setPdfPageCount(null);
+
+    if (selectedFile) {
+      try {
+        const arrayBuffer = await selectedFile.arrayBuffer();
+        const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+        const count = pdfDoc.getPageCount();
+        setPdfPageCount(count);
+        setFromPage(1);
+        setToPage(count);
+      } catch (err) {
+        console.error('Could not parse PDF page count:', err);
+      }
+    }
+  };
+
+  const calculateSelectedPagesCount = (): number => {
+    if (pageSelectionMode === 'all') {
+      return Math.max(1, pdfPageCount || 1);
+    }
+
+    if (pageSelectionMode === 'range') {
+      const f = Math.max(1, Math.min(fromPage || 1, pdfPageCount || 9999));
+      const t = Math.max(f, Math.min(toPage || 1, pdfPageCount || 9999));
+      return Math.max(1, t - f + 1);
+    }
+
+    if (pageSelectionMode === 'custom') {
+      if (!customPagesInput.trim()) return 1;
+      const pagesSet = new Set<number>();
+      const parts = customPagesInput.split(',');
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (!trimmed) continue;
+        if (trimmed.includes('-')) {
+          const [startStr, endStr] = trimmed.split('-');
+          const start = parseInt(startStr, 10);
+          const end = parseInt(endStr, 10);
+          if (!isNaN(start) && !isNaN(end)) {
+            const s = Math.max(1, Math.min(start, end));
+            const e = Math.max(s, Math.max(start, end));
+            for (let i = s; i <= e; i++) {
+              if (pdfPageCount ? i <= pdfPageCount : true) {
+                pagesSet.add(i);
+              }
+            }
+          }
+        } else {
+          const p = parseInt(trimmed, 10);
+          if (!isNaN(p) && p > 0 && (pdfPageCount ? p <= pdfPageCount : true)) {
+            pagesSet.add(p);
+          }
+        }
+      }
+      return pagesSet.size > 0 ? pagesSet.size : 1;
+    }
+
+    return 1;
+  };
+
+  const selectedPagesCount = calculateSelectedPagesCount();
+
   useEffect(() => {
     if (shopInfo) {
-      let price = 0;
-      if (printType === 'bw') price = shopInfo.pricing_bw || 0;
-      else if (printType === 'bw_double') price = shopInfo.pricing_bw_double || 0;
-      else if (printType === 'color') price = shopInfo.pricing_color || 0;
-      else if (printType === 'color_double') price = shopInfo.pricing_color_double || 0;
+      let basePrice = 0;
+      if (printType === 'bw') basePrice = shopInfo.pricing_bw || 0;
+      else if (printType === 'bw_double') basePrice = shopInfo.pricing_bw_double || 0;
+      else if (printType === 'color') basePrice = shopInfo.pricing_color || 0;
+      else if (printType === 'color_double') basePrice = shopInfo.pricing_color_double || 0;
       
+      const pagesPerCopy = calculateSelectedPagesCount();
+      const totalPrintedPages = pagesPerCopy * Math.max(1, quantity);
+
+      let finalPrice = basePrice;
+      let activeBulk: number | null = null;
+
+      if (bulkPrices.length > 0) {
+        const matching = bulkPrices.filter(r => {
+          const typeMatch = r.printType === 'all' || r.printType === printType;
+          const pageMatch = totalPrintedPages >= r.minPages;
+          return typeMatch && pageMatch;
+        });
+
+        if (matching.length > 0) {
+          const bestRate = Math.min(...matching.map(r => r.pricePerPage));
+          if (bestRate < basePrice) {
+            finalPrice = bestRate;
+            activeBulk = bestRate;
+          }
+        }
+      }
+
+      setAppliedBulkRate(activeBulk);
+
       const addonsPrice = selectedAddons.reduce((sum, addonId) => {
         const addon = addons.find(a => a.id === addonId);
         return sum + (addon ? addon.price : 0);
       }, 0);
       
-      setTotalCost((price * quantity) + addonsPrice);
+      setTotalCost((finalPrice * pagesPerCopy * quantity) + addonsPrice);
     }
-  }, [quantity, printType, shopInfo, selectedAddons, addons]);
+  }, [quantity, printType, shopInfo, selectedAddons, addons, pageSelectionMode, pdfPageCount, fromPage, toPage, customPagesInput, bulkPrices]);
 
   const handleUpload = async (e: React.FormEvent) => { 
     e.preventDefault(); 
@@ -143,13 +260,22 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
       // 2. Fetch the anonymous user ID to link to the order
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Format customer name to append selected add-ons if any
-      let finalCustomerName = name;
+      // Format customer name to include page selection details & add-ons
+      let pageDetailsStr = 'All Pages';
+      if (pageSelectionMode === 'range') {
+        pageDetailsStr = `Pages ${fromPage}-${toPage}`;
+      } else if (pageSelectionMode === 'custom') {
+        pageDetailsStr = `Pages ${customPagesInput || 'Custom'}`;
+      } else if (pdfPageCount) {
+        pageDetailsStr = `All ${pdfPageCount} Pgs (${selectedPagesCount} Total)`;
+      }
+
+      let finalCustomerName = `${name} [${pageDetailsStr}]`;
       if (selectedAddons.length > 0) {
         const addonNames = selectedAddons
           .map(id => addons.find(a => a.id === id)?.name)
           .filter(Boolean);
-        finalCustomerName = `${name} [+ ${addonNames.join(', ')}]`;
+        finalCustomerName += ` [+ ${addonNames.join(', ')}]`;
       }
 
       // 3. Add to orders table exactly matching your existing schema
@@ -426,11 +552,11 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
             </div>
           )}
 
-          {/* Dropbox File Upload Box (Moved to Top) */}
+          {/* Dropbox File Upload Box */}
           <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-slate-50 hover:border-yellow-400 transition-colors relative cursor-pointer">
             <input 
               type="file" 
-              onChange={(e) => setFile(e.target.files?.[0] || null)} 
+              onChange={handleFileChange} 
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               accept=".pdf"
               required
@@ -441,7 +567,13 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
                 <span className="text-sm font-semibold text-slate-900 bg-yellow-100 px-3 py-1 rounded-full overflow-hidden text-ellipsis max-w-[200px] whitespace-nowrap">
                   {file.name}
                 </span>
-                <span className="text-xs text-slate-500 mt-2">Ready to send</span>
+                {pdfPageCount !== null ? (
+                  <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-2.5 py-0.5 rounded-md mt-2 border border-yellow-200">
+                    📄 {pdfPageCount} Page{pdfPageCount > 1 ? 's' : ''} Detected
+                  </span>
+                ) : (
+                  <span className="text-xs text-slate-500 mt-2">Reading PDF pages...</span>
+                )}
               </div>
             ) : (
               <>
@@ -450,6 +582,102 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
               </>
             )}
           </div>
+
+          {/* Page Selection Options (All / Range / Custom Specific Pages) */}
+          {file && (
+            <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <div className="flex items-center justify-between">
+                <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Pages to Print
+                </span>
+                <span className="text-xs font-extrabold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
+                  {selectedPagesCount} Page{selectedPagesCount > 1 ? 's' : ''} Selected
+                </span>
+              </div>
+
+              {/* Mode Buttons */}
+              <div className="grid grid-cols-3 gap-1.5 text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setPageSelectionMode('all')}
+                  className={`py-2 px-2 rounded-xl border transition-all cursor-pointer text-center text-[11px] ${
+                    pageSelectionMode === 'all'
+                      ? 'bg-yellow-400 border-yellow-400 text-slate-950 shadow-xs font-black'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  All Pages ({pdfPageCount || 1})
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPageSelectionMode('range')}
+                  className={`py-2 px-2 rounded-xl border transition-all cursor-pointer text-center text-[11px] ${
+                    pageSelectionMode === 'range'
+                      ? 'bg-yellow-400 border-yellow-400 text-slate-950 shadow-xs font-black'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  Page Range
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPageSelectionMode('custom')}
+                  className={`py-2 px-2 rounded-xl border transition-all cursor-pointer text-center text-[11px] ${
+                    pageSelectionMode === 'custom'
+                      ? 'bg-yellow-400 border-yellow-400 text-slate-950 shadow-xs font-black'
+                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  Specific Pages
+                </button>
+              </div>
+
+              {/* Range Mode Input (From - To) */}
+              {pageSelectionMode === 'range' && (
+                <div className="grid grid-cols-2 gap-3 pt-1 animate-fade-in">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">From Page</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max={pdfPageCount || 9999}
+                      value={fromPage}
+                      onChange={(e) => setFromPage(parseInt(e.target.value) || 1)}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">To Page</label>
+                    <input
+                      type="number"
+                      min={fromPage}
+                      max={pdfPageCount || 9999}
+                      value={toPage}
+                      onChange={(e) => setToPage(parseInt(e.target.value) || 1)}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Custom Pages Input */}
+              {pageSelectionMode === 'custom' && (
+                <div className="pt-1 animate-fade-in">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Enter Page Numbers / Ranges</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 1-5, 8, 11-13"
+                    value={customPagesInput}
+                    onChange={(e) => setCustomPagesInput(e.target.value)}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1 font-medium">Use commas and hyphens (e.g. 1-3, 5, 8-10)</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Custom Add-ons Checkboxes */}
           {file && addons.length > 0 && (
@@ -544,6 +772,15 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
               />
             </div>
           </div>
+
+          {appliedBulkRate !== null && (
+            <div className="bg-green-50 border border-green-200 text-green-800 p-2.5 rounded-xl text-xs font-bold flex items-center justify-between animate-in fade-in">
+              <span>🏷️ Bulk Discount Applied!</span>
+              <span className="font-extrabold text-green-700 bg-white px-2 py-0.5 rounded border border-green-200">
+                ₹{appliedBulkRate.toFixed(2)} / page
+              </span>
+            </div>
+          )}
 
           <button 
             type="submit" 

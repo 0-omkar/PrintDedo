@@ -131,18 +131,15 @@ export default function RenewPage() {
                   </div>
                 </div>
 
-                <a 
-                  href="mailto:omkar.admin.xeroxflow@gmail.com"
-                  className="flex items-center space-x-3.5 bg-slate-50 border border-slate-200/50 p-3 rounded-2xl hover:border-yellow-300 transition cursor-pointer text-left block w-full"
-                >
+                <div className="flex items-center space-x-3.5 bg-slate-50 border border-slate-200/50 p-3 rounded-2xl">
                   <div className="bg-yellow-400/10 p-2 rounded-xl text-yellow-600">
                     <Mail className="w-5 h-5" />
                   </div>
                   <div>
                     <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email Address</span>
-                    <span className="text-sm font-extrabold text-slate-800 break-all">omkar.admin.xeroxflow@gmail.com</span>
+                    <span className="text-xs font-semibold text-slate-500 italic">Will be available soon</span>
                   </div>
-                </a>
+                </div>
 
                 <a 
                   href="tel:9373833966"
@@ -153,7 +150,7 @@ export default function RenewPage() {
                   </div>
                   <div>
                     <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Mobile Number</span>
-                    <span className="text-sm font-extrabold text-slate-800">+91 9373833966</span>
+                    <span className="text-sm font-extrabold text-slate-800">9373833966</span>
                   </div>
                 </a>
               </div>

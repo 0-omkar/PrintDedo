@@ -3,8 +3,9 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
-import { Printer, FileText, CheckCircle, Edit2, Star, MapPin, LogOut, Upload, X, Shield } from 'lucide-react';
+import { Printer, FileText, CheckCircle, Edit2, Star, MapPin, LogOut, Upload, X, Shield, Scissors, Plus, Layers, Trash2, Tag } from 'lucide-react';
 import QRCode from 'react-qr-code';
+import { PDFDocument } from 'pdf-lib';
 
 const XeroxLogoSVG = () => (
   <svg viewBox="0 0 100 100" className="w-12 h-12 text-slate-800" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -45,8 +46,33 @@ const getSplitShopName = (name: string) => {
   };
 };
 
+interface RecentOrder {
+  order: any;
+  completedAt: number;
+}
+
+interface BulkPriceRule {
+  id: string;
+  minPages: number;
+  printType: string;
+  pricePerPage: number;
+}
+
 export default function DashboardPage() {
   const [orders, setOrders] = useState<any[]>([]);
+  const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [timerTick, setTimerTick] = useState<number>(0);
+  const [isRecentsModalOpen, setIsRecentsModalOpen] = useState(false);
+
+  // Bulk Pricing Rules State
+  const [bulkPrices, setBulkPrices] = useState<BulkPriceRule[]>([]);
+  const [isAddBulkOpen, setIsAddBulkOpen] = useState(false);
+  const [isViewBulkOpen, setIsViewBulkOpen] = useState(false);
+
+  const [bulkMinPages, setBulkMinPages] = useState('50');
+  const [bulkPrintType, setBulkPrintType] = useState('all');
+  const [bulkPricePerPage, setBulkPricePerPage] = useState('1.5');
+
   const [shopName, setShopName] = useState('Loading...');
   const [pricingBwSingle, setPricingBwSingle] = useState('0');
   const [pricingBwDouble, setPricingBwDouble] = useState('0');
@@ -149,8 +175,11 @@ export default function DashboardPage() {
     let subscription: any;
 
     const loadDashboard = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error || !session) {
+        if (error) {
+          await supabase.auth.signOut().catch(() => {});
+        }
         router.push('/login');
         return;
       }
@@ -291,6 +320,90 @@ export default function DashboardPage() {
     }
   }, [shopName, upiId, pricingBwSingle, pricingBwDouble, pricingColorSingle, pricingColorDouble, initialData]);
 
+  // Load stored recent orders & bulk prices from localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined' && userId) {
+      const stored = localStorage.getItem(`xeroxflow_recent_orders_${userId}`);
+      if (stored) {
+        try {
+          const parsed: RecentOrder[] = JSON.parse(stored);
+          const now = Date.now();
+          const threeMin = 3 * 60 * 1000;
+          const valid = parsed.filter(item => (now - item.completedAt) < threeMin);
+          setRecentOrders(valid);
+        } catch (e) {}
+      }
+
+      const storedBulk = localStorage.getItem(`xeroxflow_bulk_prices_${userId}`);
+      if (storedBulk) {
+        try { setBulkPrices(JSON.parse(storedBulk)); } catch (e) {}
+      }
+    }
+  }, [userId]);
+
+  const handleAddBulkRule = (e: React.FormEvent) => {
+    e.preventDefault();
+    const minPages = parseInt(bulkMinPages);
+    const price = parseFloat(bulkPricePerPage);
+    if (isNaN(minPages) || isNaN(price)) return;
+
+    const newRule: BulkPriceRule = {
+      id: Date.now().toString(),
+      minPages,
+      printType: bulkPrintType,
+      pricePerPage: price
+    };
+
+    const updated = [...bulkPrices, newRule];
+    setBulkPrices(updated);
+    if (userId) {
+      localStorage.setItem(`xeroxflow_bulk_prices_${userId}`, JSON.stringify(updated));
+    }
+    setIsAddBulkOpen(false);
+    setBulkMinPages('50');
+    setBulkPricePerPage('1.5');
+  };
+
+  const handleDeleteBulkRule = (id: string) => {
+    const updated = bulkPrices.filter(r => r.id !== id);
+    setBulkPrices(updated);
+    if (userId) {
+      localStorage.setItem(`xeroxflow_bulk_prices_${userId}`, JSON.stringify(updated));
+    }
+  };
+
+  // Recents Queue 1-second ticker (updates countdown & auto-deletes after 3 min)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const threeMinMs = 3 * 60 * 1000;
+
+      setRecentOrders(prev => {
+        let hasChanges = false;
+        const remaining = prev.filter(item => {
+          const elapsed = now - item.completedAt;
+          if (elapsed >= threeMinMs) {
+            hasChanges = true;
+            if (item.order?.id) {
+              supabase.from('orders').delete().eq('id', item.order.id).then(() => {}, () => {});
+            }
+            return false;
+          }
+          return true;
+        });
+
+        if (hasChanges && userId) {
+          localStorage.setItem(`xeroxflow_recent_orders_${userId}`, JSON.stringify(remaining));
+        }
+        return remaining;
+      });
+
+      setTimerTick(t => t + 1);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [userId]);
+
   // Poll and automatically filter out items older than 10 minutes from state in real-time
   useEffect(() => {
     const interval = setInterval(() => {
@@ -366,7 +479,7 @@ export default function DashboardPage() {
       .select('*')
       .eq('shop_id', shopId)
       .eq('status', 'pending')
-      .order('created_at', { ascending: false }); // Newest first (latest on top)
+      .order('created_at', { ascending: true }); // FIFO: Earliest created sits at top!
     
     if (data) {
       const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
@@ -428,6 +541,57 @@ export default function DashboardPage() {
     window.print();
   };
 
+  const slicePdfIfNeeded = async (pdfArrayBuffer: ArrayBuffer, customerName: string): Promise<Uint8Array> => {
+    if (!customerName) return new Uint8Array(pdfArrayBuffer);
+    
+    const match = customerName.match(/\[Pages\s+([^\]]+)\]/i);
+    if (!match) return new Uint8Array(pdfArrayBuffer);
+
+    const spec = match[1].trim();
+    if (spec.toLowerCase().startsWith('all')) return new Uint8Array(pdfArrayBuffer);
+
+    try {
+      const srcDoc = await PDFDocument.load(pdfArrayBuffer, { ignoreEncryption: true });
+      const totalPages = srcDoc.getPageCount();
+
+      const selectedIndices: number[] = [];
+      const parts = spec.split(',');
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (!trimmed) continue;
+        if (trimmed.includes('-')) {
+          const [startStr, endStr] = trimmed.split('-');
+          const start = parseInt(startStr, 10);
+          const end = parseInt(endStr, 10);
+          if (!isNaN(start) && !isNaN(end)) {
+            const s = Math.max(1, Math.min(start, end));
+            const e = Math.min(totalPages, Math.max(start, end));
+            for (let i = s; i <= e; i++) {
+              selectedIndices.push(i - 1);
+            }
+          }
+        } else {
+          const p = parseInt(trimmed, 10);
+          if (!isNaN(p) && p >= 1 && p <= totalPages) {
+            selectedIndices.push(p - 1);
+          }
+        }
+      }
+
+      if (selectedIndices.length === 0) return new Uint8Array(pdfArrayBuffer);
+
+      const uniqueIndices = Array.from(new Set(selectedIndices));
+      const dstDoc = await PDFDocument.create();
+      const copiedPages = await dstDoc.copyPages(srcDoc, uniqueIndices);
+      copiedPages.forEach(p => dstDoc.addPage(p));
+      
+      return await dstDoc.save();
+    } catch (err) {
+      console.error('Failed to slice PDF:', err);
+      return new Uint8Array(pdfArrayBuffer);
+    }
+  };
+
   const handlePrint = async (order: any) => {
     try {
       // 1. Securely download the PDF blob from Supabase
@@ -437,12 +601,15 @@ export default function DashboardPage() {
 
       if (error) throw error;
 
-      // 2. Create a temporary local URL for the blob (force application/pdf type)
-      const url = URL.createObjectURL(new Blob([data], { type: 'application/pdf' }));
+      // 2. Pre-slice PDF if customer selected specific pages
+      const rawBuffer = await data.arrayBuffer();
+      const processedPdfBytes = await slicePdfIfNeeded(rawBuffer, order.customer_name);
+
+      // 3. Create a temporary local URL for the blob (force application/pdf type)
+      const url = URL.createObjectURL(new Blob([new Uint8Array(processedPdfBytes)], { type: 'application/pdf' }));
       
-      // 3. Create a hidden iframe to bypass popup blockers and print flawlessly
+      // 4. Create a hidden iframe to bypass popup blockers and print flawlessly
       const iframe = document.createElement('iframe');
-      // FIX 1: Don't use display: none! It prevents the browser from rendering the PDF.
       iframe.style.visibility = 'hidden';
       iframe.style.position = 'absolute';
       iframe.style.width = '1px';
@@ -453,21 +620,30 @@ export default function DashboardPage() {
       document.body.appendChild(iframe);
       
       iframe.onload = () => {
-        // Add a tiny delay to ensure the browser's PDF viewer has completely rendered the file
         setTimeout(() => {
           iframe.contentWindow?.focus();
           iframe.contentWindow?.print();
 
-          // FIX 2: Move the confirm box to trigger AFTER the print window closes
-          // (The .print() function execution usually halts until the print dialog is closed)
           setTimeout(async () => {
-            const didPrint = window.confirm("Did the document print successfully?\n\nClick OK to mark as completed and remove it from the queue.");
+            const didPrint = window.confirm("Did the document print successfully?\n\nClick OK to mark as completed and move it to Recents queue.");
             
             if (didPrint) {
               await supabase
                 .from('orders')
                 .update({ status: 'completed' })
                 .eq('id', order.id);
+
+              const now = Date.now();
+              setRecentOrders(prev => {
+                const updated = [
+                  { order, completedAt: now },
+                  ...prev.filter(r => r.order.id !== order.id)
+                ];
+                if (userId) {
+                  localStorage.setItem(`xeroxflow_recent_orders_${userId}`, JSON.stringify(updated));
+                }
+                return updated;
+              });
 
               if (userId) fetchOrders(userId);
             }
@@ -511,15 +687,15 @@ export default function DashboardPage() {
 
       {/* Left Sidebar */}
       <aside className="w-[320px] bg-white border-r border-slate-200 flex flex-col hidden md:flex print:hidden relative z-10">
-        <div className="p-6 border-b border-slate-200 flex flex-col justify-start">
+        <Link href="/" className="p-6 border-b border-slate-200 flex flex-col justify-start hover:bg-slate-50 transition-colors group cursor-pointer no-underline text-inherit">
           <div className="flex items-center space-x-3">
-            <div className="bg-yellow-400 p-2 rounded-xl">
+            <div className="bg-yellow-400 p-2 rounded-xl group-hover:scale-105 transition-transform">
               <Printer className="w-5 h-5 text-black" />
             </div>
             <span className="text-lg font-bold tracking-tight text-slate-950">Xerox<span className="text-yellow-500">Flow</span></span>
           </div>
           <span className="text-[10px] text-slate-400 font-bold mt-1 tracking-wider uppercase ml-12">Smart Printing. Simplified.</span>
-        </div>
+        </Link>
             <div className="p-6 flex-1 overflow-y-auto">
           {/* QR Code Section */}
           <div className="mb-8 flex flex-col items-center">
@@ -586,6 +762,27 @@ export default function DashboardPage() {
               </div>
             </div>
             
+            {/* Bulk Pricing Action Buttons (Right above Store UPI ID) */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsAddBulkOpen(true)}
+                className="w-full text-xs font-bold text-black bg-yellow-400 hover:bg-yellow-500 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs border-none"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Set Bulk Prices</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsViewBulkOpen(true)}
+                className="w-full text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Layers className="w-3.5 h-3.5 text-slate-500" />
+                <span>View & Delete Bulk Prices ({bulkPrices.length})</span>
+              </button>
+            </div>
+
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1">Store UPI ID (For Payments)</label>
               <input 
@@ -653,15 +850,15 @@ export default function DashboardPage() {
           }}
           className="relative bg-white border border-slate-200 hover:border-yellow-400 rounded-3xl p-6 mb-8 shadow-sm flex items-center justify-between cursor-pointer transition-all overflow-hidden select-none group"
         >
-          {/* Yellow brush illustration decoration on far right */}
-          <div className="absolute right-0 top-0 bottom-0 w-1/3 overflow-hidden pointer-events-none select-none hidden sm:block">
+          {/* Yellow brush illustration decoration on far right background */}
+          <div className="absolute right-0 top-0 bottom-0 w-1/4 overflow-hidden pointer-events-none select-none hidden sm:block">
             {/* Yellow brush sweep path */}
-            <svg viewBox="0 0 200 200" className="absolute right-0 top-0 bottom-0 h-full w-full text-yellow-400 transition-transform group-hover:scale-105 duration-500" fill="currentColor" preserveAspectRatio="none">
-              <path d="M 80,0 C 110,60 70,140 120,200 L 200,200 L 200,0 Z" />
+            <svg viewBox="0 0 200 200" className="absolute right-0 top-0 bottom-0 h-full w-full text-yellow-400/90 transition-transform group-hover:scale-105 duration-500" fill="currentColor" preserveAspectRatio="none">
+              <path d="M 120,0 C 140,60 110,140 150,200 L 200,200 L 200,0 Z" />
             </svg>
             {/* Copier line drawing */}
-            <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-15 text-black">
-              <svg viewBox="0 0 100 100" className="w-32 h-32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 opacity-15 text-black">
+              <svg viewBox="0 0 100 100" className="w-24 h-24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <rect x="25" y="40" width="50" height="40" rx="4" />
                 <line x1="25" y1="52" x2="75" y2="52" />
                 <rect x="30" y="44" width="12" height="5" rx="1" />
@@ -677,9 +874,9 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="relative z-10 flex items-center space-x-6 w-full sm:w-2/3">
+          <div className="relative z-10 flex items-center space-x-6 flex-1 min-w-0 pr-4">
             {/* Circular Logo Container */}
-            <div className="w-24 h-24 rounded-full border-4 border-yellow-400 bg-white flex items-center justify-center overflow-hidden shadow-sm shrink-0">
+            <div className="w-20 h-20 md:w-24 md:h-24 rounded-full border-4 border-yellow-400 bg-white flex items-center justify-center overflow-hidden shadow-sm shrink-0">
               {logo ? (
                 <img src={logo} alt="Shop Logo" className="w-full h-full object-cover" />
               ) : (
@@ -714,32 +911,35 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Rating Section */}
-          <div className="relative z-10 hidden md:flex flex-col items-center justify-center border-l border-slate-200 pl-8 shrink-0 pr-24">
-            <div className="flex items-center space-x-2">
-              <Star className="w-6 h-6 text-yellow-400 fill-yellow-400" />
-              <span className="text-2xl font-black text-slate-900">{rating.toFixed(1)}</span>
+          {/* Rating Section - Styled Premium Card */}
+          <div className="relative z-10 hidden md:flex flex-col items-center justify-center bg-white/95 border border-slate-200/80 shadow-xs backdrop-blur-xs p-3 px-5 rounded-2xl shrink-0 space-y-1 border-l-4 border-l-yellow-400">
+            <div className="flex items-center space-x-1.5">
+              <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
+              <span className="text-xl font-black text-slate-950">{rating.toFixed(1)}</span>
             </div>
-            <span className="text-slate-400 text-xs font-bold mt-1">({reviews} Reviews)</span>
             
             {/* Stars rendering */}
-            <div className="flex items-center space-x-0.5 mt-2">
+            <div className="flex items-center space-x-0.5">
               {[...Array(5)].map((_, i) => {
                 const isFull = i < Math.floor(rating);
                 const isHalf = !isFull && i < rating;
                 return (
                   <Star 
                     key={i} 
-                    className={`w-3.5 h-3.5 ${isFull ? 'text-yellow-400 fill-yellow-400' : isHalf ? 'text-yellow-400 fill-yellow-400 opacity-60' : 'text-slate-200'}`} 
+                    className={`w-3.5 h-3.5 ${isFull ? 'text-amber-400 fill-amber-400' : isHalf ? 'text-amber-400 fill-amber-400 opacity-60' : 'text-slate-200'}`} 
                   />
                 );
               })}
             </div>
+
+            <span className="text-[10px] font-extrabold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200/60 tracking-wider">
+              {reviews} Reviews
+            </span>
           </div>
         </div>
 
         {/* Live Queue Header */}
-        <div className="flex justify-between items-center mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div className="flex items-center space-x-3.5">
             <div className="bg-yellow-100 p-2.5 rounded-xl text-yellow-600 border border-yellow-100/50">
               <svg viewBox="0 0 24 24" className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -753,22 +953,37 @@ export default function DashboardPage() {
             </div>
           </div>
           
-          {getSubscriptionAlert()?.type === 'expired' ? (
-            <div className="flex items-center space-x-2 text-xs font-bold text-red-700 bg-red-50 px-3.5 py-1.5 rounded-full border border-red-100">
-              <span className="relative flex h-2 w-2">
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+          <div className="flex items-center space-x-3">
+            {/* Recents Button */}
+            <button
+              onClick={() => setIsRecentsModalOpen(true)}
+              className="flex items-center space-x-2 text-xs font-extrabold text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 hover:border-yellow-400 px-3.5 py-2.5 rounded-2xl transition-all cursor-pointer shadow-xs"
+            >
+              <CheckCircle className="w-4 h-4 text-green-600" />
+              <span>Recents</span>
+              <span className="bg-green-100 text-green-800 text-[10px] font-black px-2 py-0.5 rounded-full">
+                {recentOrders.length}
               </span>
-              <span>Updates paused</span>
-            </div>
-          ) : (
-            <div className="flex items-center space-x-2 text-xs font-bold text-yellow-700 bg-yellow-50 px-3.5 py-1.5 rounded-full border border-yellow-100">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
-              </span>
-              <span>Receiving updates</span>
-            </div>
-          )}
+            </button>
+
+            {/* Receiving updates banner */}
+            {getSubscriptionAlert()?.type === 'expired' ? (
+              <div className="flex items-center space-x-2 text-xs font-bold text-red-700 bg-red-50 px-3.5 py-2.5 rounded-2xl border border-red-100">
+                <span className="relative flex h-2 w-2">
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                </span>
+                <span>Updates paused</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2 text-xs font-bold text-yellow-700 bg-yellow-50 px-3.5 py-2.5 rounded-2xl border border-yellow-100">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
+                </span>
+                <span>Receiving updates</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Subscription Expired Live Queue Banner */}
@@ -858,6 +1073,225 @@ export default function DashboardPage() {
           )}
         </div>
       </main>
+
+      {/* Modal 1: Create Bulk Price Rule */}
+      {isAddBulkOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl w-full max-w-sm text-left space-y-5 animate-scale-in relative">
+            <button 
+              onClick={() => setIsAddBulkOpen(false)}
+              className="absolute right-6 top-6 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition border-none bg-transparent cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center space-x-3 pb-3 border-b border-slate-100">
+              <div className="bg-yellow-100 p-3 rounded-2xl text-yellow-700">
+                <Tag className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-950 uppercase tracking-tight">Set Bulk Pricing Tier</h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Custom rates for large page counts</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleAddBulkRule} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Minimum Page Count Threshold
+                </label>
+                <input
+                  type="number"
+                  min="2"
+                  placeholder="e.g. 50"
+                  value={bulkMinPages}
+                  onChange={(e) => setBulkMinPages(e.target.value)}
+                  className="w-full p-3 border border-slate-200 rounded-xl text-slate-900 text-sm font-semibold bg-slate-50 focus:bg-white"
+                  required
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">Applies when total printed pages (Pages × Copies) reaches {bulkMinPages || 'X'}+ pages</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Print Mode Applicability
+                </label>
+                <select
+                  value={bulkPrintType}
+                  onChange={(e) => setBulkPrintType(e.target.value)}
+                  className="w-full p-3 border border-slate-200 rounded-xl text-slate-900 text-sm font-semibold bg-slate-50 focus:bg-white cursor-pointer"
+                >
+                  <option value="all">All Print Types</option>
+                  <option value="bw">B&W (Single)</option>
+                  <option value="bw_double">B&W (Double)</option>
+                  <option value="color">Color (Single)</option>
+                  <option value="color_double">Color (Double)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
+                  Bulk Rate (₹ per page)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0.1"
+                  placeholder="e.g. 1.5"
+                  value={bulkPricePerPage}
+                  onChange={(e) => setBulkPricePerPage(e.target.value)}
+                  className="w-full p-3 border border-slate-200 rounded-xl text-slate-900 text-sm font-semibold bg-slate-50 focus:bg-white"
+                  required
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-yellow-400 text-black font-bold p-3.5 rounded-xl text-xs hover:bg-yellow-500 transition-all border-none cursor-pointer shadow-sm mt-2"
+              >
+                Save Bulk Price Tier
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 2: View & Delete Bulk Prices */}
+      {isViewBulkOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl w-full max-w-md text-left space-y-5 animate-scale-in relative">
+            <button 
+              onClick={() => setIsViewBulkOpen(false)}
+              className="absolute right-6 top-6 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition border-none bg-transparent cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center space-x-3 pb-3 border-b border-slate-100">
+              <div className="bg-blue-100 p-3 rounded-2xl text-blue-700">
+                <Layers className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-950 uppercase tracking-tight">Active Bulk Prices</h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Configured bulk rates for your shop</p>
+              </div>
+            </div>
+
+            <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
+              {bulkPrices.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-10 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50 p-4">
+                  <Tag className="w-8 h-8 text-slate-300 mb-2" />
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">No Bulk Prices Set</p>
+                  <p className="text-[11px] text-slate-400 font-medium mt-1">Click "Set Bulk Prices" to offer discounts on large print orders.</p>
+                </div>
+              ) : (
+                bulkPrices.map(rule => (
+                  <div key={rule.id} className="p-4 border border-slate-200 rounded-2xl bg-slate-50 flex items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs font-black text-slate-900 bg-yellow-100 px-2 py-0.5 rounded-md border border-yellow-200">
+                          {rule.minPages}+ Pages
+                        </span>
+                        <span className="text-xs font-bold text-yellow-700">₹{rule.pricePerPage} / page</span>
+                      </div>
+                      <p className="text-xs text-slate-500 font-semibold">
+                        Applies to: <strong className="text-slate-800 uppercase text-[11px]">{rule.printType.replace('_', ' ')}</strong>
+                      </p>
+                    </div>
+
+                    <button
+                      onClick={() => handleDeleteBulkRule(rule.id)}
+                      className="p-2.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl transition cursor-pointer border border-red-100 bg-white"
+                      title="Delete Bulk Price"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {isRecentsModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl w-full max-w-lg text-left space-y-5 animate-scale-in relative">
+            <button 
+              onClick={() => setIsRecentsModalOpen(false)}
+              className="absolute right-6 top-6 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition border-none bg-transparent cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center space-x-3 pb-3 border-b border-slate-100">
+              <div className="bg-green-100 p-3 rounded-2xl text-green-700">
+                <CheckCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-950 uppercase tracking-tight">Recents Queue</h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                  Completed print jobs (Auto-deleted 3 mins after completion)
+                </p>
+              </div>
+            </div>
+
+            <div className="max-h-[60vh] overflow-y-auto space-y-3.5 pr-1">
+              {recentOrders.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50 p-6">
+                  <CheckCircle className="w-10 h-10 text-slate-300 mb-2" />
+                  <p className="text-sm text-slate-500 font-bold uppercase tracking-wider">No Recent Prints</p>
+                  <p className="text-xs text-slate-400 font-medium mt-1">Completed print orders will sit here for 3 minutes before automatic removal.</p>
+                </div>
+              ) : (
+                recentOrders.map(({ order, completedAt }) => {
+                  const elapsed = Date.now() - completedAt;
+                  const remainingMs = Math.max(0, (3 * 60 * 1000) - elapsed);
+                  const totalSec = Math.floor(remainingMs / 1000);
+                  const m = Math.floor(totalSec / 60);
+                  const s = totalSec % 60;
+                  const timerStr = `${m}:${s < 10 ? '0' : ''}${s}`;
+
+                  return (
+                    <div 
+                      key={order.id}
+                      className="p-4 border border-slate-200 rounded-2xl bg-slate-50 hover:bg-white transition shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                    >
+                      <div className="space-y-1 flex-1">
+                        <div className="flex items-center space-x-2.5 flex-wrap">
+                          <h4 className="font-extrabold text-sm text-slate-950 truncate max-w-[240px]" title={formatFilename(order.file_path)}>
+                            {formatFilename(order.file_path)}
+                          </h4>
+                          <span className="text-[10px] font-mono font-black text-green-700 bg-green-50 px-2.5 py-0.5 rounded-full border border-green-200">
+                            ⏳ {timerStr} left
+                          </span>
+                        </div>
+
+                        <div className="text-xs text-slate-500 font-semibold">
+                          {order.customer_name || 'Anonymous'} {order.customer_phone ? `(${order.customer_phone})` : ''}
+                        </div>
+
+                        <div className="text-xs text-slate-500 font-bold pt-0.5">
+                          Qty: {order.quantity} • {order.color_mode.replace('_', ' ')} • <span className="text-yellow-600">₹{order.total_cost || 0}</span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => {
+                          handlePrint(order);
+                        }}
+                        className="bg-yellow-400 hover:bg-yellow-500 text-black font-bold px-4 py-2.5 rounded-xl text-xs transition flex justify-center items-center space-x-1.5 border-none cursor-pointer shadow-xs"
+                      >
+                        <Printer className="w-4 h-4" />
+                        <span>Reprint</span>
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Banner/Profile Edit Modal */}
       {isEditingBanner && (

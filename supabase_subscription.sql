@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS public.plans (
 
 -- OPTION A: Disable RLS (Simplest)
 ALTER TABLE public.plans DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shops DISABLE ROW LEVEL SECURITY;
 
 -- OPTION B: Keep RLS enabled but allow public CRUD access (If Option A is not preferred)
 -- ALTER TABLE public.plans ENABLE ROW LEVEL SECURITY;
