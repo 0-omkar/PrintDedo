@@ -1,6 +1,6 @@
 'use client';
 import { useState, use, useEffect } from 'react';
-import { UploadCloud, FileText, CheckCircle, Star, X, Layers } from 'lucide-react';
+import { UploadCloud, FileText, CheckCircle, Star, X, Layers, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import { PDFDocument } from 'pdf-lib';
@@ -29,6 +29,21 @@ const XeroxLogoSVG = () => (
   </svg>
 );
 
+interface AttachedDoc {
+  id: string;
+  file: File;
+  pdfPageCount: number | null;
+  pageSelectionMode: 'all' | 'range' | 'custom';
+  fromPage: number;
+  toPage: number;
+  customPagesInput: string;
+  selectedPagesCount: number;
+  quantity: number;
+  printType: string;
+  selectedAddons: string[];
+  itemCost: number;
+}
+
 export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: string }> }) {
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState('');
@@ -38,6 +53,10 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
   const [shopInfo, setShopInfo] = useState<any>(null);
   const [totalCost, setTotalCost] = useState(0);
   const [logo, setLogo] = useState('');
+
+  // Multi-document list state
+  const [attachedDocs, setAttachedDocs] = useState<AttachedDoc[]>([]);
+  const [submittedDocCount, setSubmittedDocCount] = useState(1);
 
   // PDF Page Counting & Page Selection States
   const [pdfPageCount, setPdfPageCount] = useState<number | null>(null);
@@ -55,14 +74,17 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
   const [addons, setAddons] = useState<Addon[]>([]);
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
 
-  // Bulk Pricing Rules State
-  interface BulkPriceRule {
+  // Page Range Price Tiers State
+  interface PriceTier {
     id: string;
-    minPages: number;
-    printType: string;
-    pricePerPage: number;
+    fromPage: number;
+    toPage: number | null;
+    pricingBwSingle: number;
+    pricingBwDouble: number;
+    pricingColorSingle: number;
+    pricingColorDouble: number;
   }
-  const [bulkPrices, setBulkPrices] = useState<BulkPriceRule[]>([]);
+  const [priceTiers, setPriceTiers] = useState<PriceTier[]>([]);
   const [appliedBulkRate, setAppliedBulkRate] = useState<number | null>(null);
 
   // Review states
@@ -73,6 +95,7 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
 
   const [uploading, setUploading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const resolvedParams = use(params);
 
@@ -107,6 +130,13 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
       const storedLogo = localStorage.getItem('xeroxflow_logo');
       if (storedLogo) setLogo(storedLogo);
 
+      const storedTiers = localStorage.getItem(`xeroxflow_price_tiers_${resolvedParams.shopId}`);
+      if (storedTiers) {
+        try {
+          setPriceTiers(JSON.parse(storedTiers));
+        } catch (e) {}
+      }
+
       const stored = localStorage.getItem(`xeroxflow_addons_${resolvedParams.shopId}`);
       if (stored) {
         try {
@@ -123,12 +153,6 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
         setAddons(defaults);
       }
 
-      const storedBulk = localStorage.getItem(`xeroxflow_bulk_prices_${resolvedParams.shopId}`);
-      if (storedBulk) {
-        try {
-          setBulkPrices(JSON.parse(storedBulk));
-        } catch (e) {}
-      }
     }
   }, [resolvedParams.shopId]);
 
@@ -197,125 +221,229 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
 
   const selectedPagesCount = calculateSelectedPagesCount();
 
-  useEffect(() => {
-    if (shopInfo) {
-      let basePrice = 0;
-      if (printType === 'bw') basePrice = shopInfo.pricing_bw || 0;
-      else if (printType === 'bw_double') basePrice = shopInfo.pricing_bw_double || 0;
-      else if (printType === 'color') basePrice = shopInfo.pricing_color || 0;
-      else if (printType === 'color_double') basePrice = shopInfo.pricing_color_double || 0;
-      
-      const pagesPerCopy = calculateSelectedPagesCount();
-      const totalPrintedPages = pagesPerCopy * Math.max(1, quantity);
+  // Helper function to calculate item cost
+  const calculateDocCost = (
+    pType: string,
+    pagesCount: number,
+    qty: number,
+    selAddons: string[]
+  ): { cost: number; bulkRate: number | null } => {
+    if (!shopInfo) return { cost: 0, bulkRate: null };
+    let basePrice = 0;
+    if (pType === 'bw') basePrice = shopInfo.pricing_bw || 0;
+    else if (pType === 'bw_double') basePrice = shopInfo.pricing_bw_double || 0;
+    else if (pType === 'color') basePrice = shopInfo.pricing_color || 0;
+    else if (pType === 'color_double') basePrice = shopInfo.pricing_color_double || 0;
 
-      let finalPrice = basePrice;
-      let activeBulk: number | null = null;
+    const totalPrintedPages = pagesCount * Math.max(1, qty);
+    let finalPrice = basePrice;
+    let activeBulk: number | null = null;
 
-      if (bulkPrices.length > 0) {
-        const matching = bulkPrices.filter(r => {
-          const typeMatch = r.printType === 'all' || r.printType === printType;
-          const pageMatch = totalPrintedPages >= r.minPages;
-          return typeMatch && pageMatch;
-        });
+    if (priceTiers.length > 0) {
+      // Find tier matching total printed pages range
+      const matchingTier = priceTiers.find(t => {
+        const minMatch = totalPrintedPages >= t.fromPage;
+        const maxMatch = t.toPage === null || t.toPage === 0 || totalPrintedPages <= t.toPage;
+        return minMatch && maxMatch;
+      });
 
-        if (matching.length > 0) {
-          const bestRate = Math.min(...matching.map(r => r.pricePerPage));
-          if (bestRate < basePrice) {
-            finalPrice = bestRate;
-            activeBulk = bestRate;
-          }
+      if (matchingTier) {
+        let tierRate = basePrice;
+        if (pType === 'bw') tierRate = matchingTier.pricingBwSingle;
+        else if (pType === 'bw_double') tierRate = matchingTier.pricingBwDouble;
+        else if (pType === 'color') tierRate = matchingTier.pricingColorSingle;
+        else if (pType === 'color_double') tierRate = matchingTier.pricingColorDouble;
+
+        finalPrice = tierRate;
+        if (tierRate < basePrice) {
+          activeBulk = tierRate;
         }
       }
-
-      setAppliedBulkRate(activeBulk);
-
-      const addonsPrice = selectedAddons.reduce((sum, addonId) => {
-        const addon = addons.find(a => a.id === addonId);
-        return sum + (addon ? addon.price : 0);
-      }, 0);
-      
-      setTotalCost((finalPrice * pagesPerCopy * quantity) + addonsPrice);
     }
-  }, [quantity, printType, shopInfo, selectedAddons, addons, pageSelectionMode, pdfPageCount, fromPage, toPage, customPagesInput, bulkPrices]);
 
-  const handleUpload = async (e: React.FormEvent) => { 
-    e.preventDefault(); 
-    if (!file || !name) return;
+    const addonsPrice = selAddons.reduce((sum, addonId) => {
+      const addon = addons.find(a => a.id === addonId);
+      return sum + (addon ? addon.price : 0);
+    }, 0);
 
+    const cost = (finalPrice * pagesCount * Math.max(1, qty)) + addonsPrice;
+    return { cost, bulkRate: activeBulk };
+  };
+
+  const currentDocCalc = calculateDocCost(printType, selectedPagesCount, quantity, selectedAddons);
+  const currentDocCost = file ? currentDocCalc.cost : 0;
+  const attachedTotalCost = attachedDocs.reduce((sum, d) => sum + d.itemCost, 0);
+  const grandTotalCost = attachedTotalCost + currentDocCost;
+
+  useEffect(() => {
+    setAppliedBulkRate(currentDocCalc.bulkRate);
+    setTotalCost(grandTotalCost);
+  }, [grandTotalCost, currentDocCalc.bulkRate]);
+
+  // Handler to attach current configured document to the batch list
+  const handleAttachAnother = () => {
+    if (!file) return;
+    const newDoc: AttachedDoc = {
+      id: Date.now().toString() + '_' + Math.random().toString(36).substring(2, 7),
+      file,
+      pdfPageCount,
+      pageSelectionMode,
+      fromPage,
+      toPage,
+      customPagesInput,
+      selectedPagesCount,
+      quantity,
+      printType,
+      selectedAddons: [...selectedAddons],
+      itemCost: currentDocCost
+    };
+    setAttachedDocs(prev => [...prev, newDoc]);
+    // Reset file picker & doc options for next attachment
+    setFile(null);
+    setPdfPageCount(null);
+    setPageSelectionMode('all');
+    setFromPage(1);
+    setToPage(1);
+    setCustomPagesInput('');
+    setQuantity(1);
+    setPrintType('bw');
+    setSelectedAddons([]);
+  };
+
+  const handleRemoveAttachedDoc = (id: string) => {
+    setAttachedDocs(prev => prev.filter(d => d.id !== id));
+  };
+
+  const handleOpenSummaryModal = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const docsToUpload: AttachedDoc[] = [...attachedDocs];
+    if (file) {
+      docsToUpload.push({
+        id: 'current_active_doc',
+        file,
+        pdfPageCount,
+        pageSelectionMode,
+        fromPage,
+        toPage,
+        customPagesInput,
+        selectedPagesCount,
+        quantity,
+        printType,
+        selectedAddons: [...selectedAddons],
+        itemCost: currentDocCost
+      });
+    }
+
+    if (docsToUpload.length === 0) {
+      setErrorMsg('Please select or attach at least one PDF document.');
+      return;
+    }
+
+    if (!name.trim()) {
+      setErrorMsg('Please enter your name.');
+      return;
+    }
+
+    setErrorMsg('');
+    setIsSummaryModalOpen(true);
+  };
+
+  const executeFinalUpload = async () => {
+    setIsSummaryModalOpen(false);
     setUploading(true);
     setErrorMsg('');
-    
+
+    const docsToUpload: AttachedDoc[] = [...attachedDocs];
+    if (file) {
+      docsToUpload.push({
+        id: 'current_active_doc',
+        file,
+        pdfPageCount,
+        pageSelectionMode,
+        fromPage,
+        toPage,
+        customPagesInput,
+        selectedPagesCount,
+        quantity,
+        printType,
+        selectedAddons: [...selectedAddons],
+        itemCost: currentDocCost
+      });
+    }
+
     try {
-      // 1. Clean the filename to store it safely in the path without a separate column
-      const safeOriginalName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-      const fileName = `${Date.now()}_${safeOriginalName}`;
-      const filePath = `${resolvedParams.shopId}/${fileName}`;
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('xerox-files')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      // 2. Fetch the anonymous user ID to link to the order
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Format customer name to include page selection details & add-ons
-      let pageDetailsStr = 'All Pages';
-      if (pageSelectionMode === 'range') {
-        pageDetailsStr = `Pages ${fromPage}-${toPage}`;
-      } else if (pageSelectionMode === 'custom') {
-        pageDetailsStr = `Pages ${customPagesInput || 'Custom'}`;
-      } else if (pdfPageCount) {
-        pageDetailsStr = `All ${pdfPageCount} Pgs (${selectedPagesCount} Total)`;
-      }
+      for (const doc of docsToUpload) {
+        // 1. Clean the filename to store it safely in the path without a separate column
+        const safeOriginalName = doc.file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const fileName = `${Date.now()}_${safeOriginalName}`;
+        const filePath = `${resolvedParams.shopId}/${fileName}`;
 
-      let finalCustomerName = `${name} [${pageDetailsStr}]`;
-      if (selectedAddons.length > 0) {
-        const addonNames = selectedAddons
-          .map(id => addons.find(a => a.id === id)?.name)
-          .filter(Boolean);
-        finalCustomerName += ` [+ ${addonNames.join(', ')}]`;
-      }
+        const { error: uploadError } = await supabase.storage
+          .from('xerox-files')
+          .upload(filePath, doc.file);
 
-      // 3. Add to orders table exactly matching your existing schema
-      const { error: dbError } = await supabase
-        .from('orders')
-        .insert({
-          shop_id: resolvedParams.shopId,
-          customer_id: user?.id,
-          file_path: filePath,
-          quantity: quantity,
-          color_mode: printType,
-          status: 'pending',
-          customer_name: finalCustomerName,
-          customer_phone: phone || '',
-          total_cost: totalCost
-        });
+        if (uploadError) throw uploadError;
 
-      if (dbError) throw dbError;
-
-      // Log the upload file size and timestamp to localStorage for admin metrics auditing
-      if (typeof window !== 'undefined') {
-        const uploadLog = {
-          shopId: resolvedParams.shopId,
-          size: file.size,
-          timestamp: Date.now()
-        };
-        const storedLogs = localStorage.getItem('xeroxflow_storage_logs');
-        let logs = [];
-        if (storedLogs) {
-          try {
-            logs = JSON.parse(storedLogs);
-          } catch (e) {}
+        // Format customer name to include page selection details & add-ons
+        let pageDetailsStr = 'All Pages';
+        if (doc.pageSelectionMode === 'range') {
+          pageDetailsStr = `Pages ${doc.fromPage}-${doc.toPage}`;
+        } else if (doc.pageSelectionMode === 'custom') {
+          pageDetailsStr = `Pages ${doc.customPagesInput || 'Custom'}`;
+        } else if (doc.pdfPageCount) {
+          pageDetailsStr = `All ${doc.pdfPageCount} Pgs (${doc.selectedPagesCount} Total)`;
         }
-        logs.push(uploadLog);
-        // Only keep the last 48 hours to prevent LocalStorage bloat
-        const fortyEightHoursAgo = Date.now() - 48 * 60 * 60 * 1000;
-        logs = logs.filter((log: any) => log.timestamp >= fortyEightHoursAgo);
-        localStorage.setItem('xeroxflow_storage_logs', JSON.stringify(logs));
+
+        let finalCustomerName = `${name} [${doc.file.name} - ${pageDetailsStr}]`;
+        if (doc.selectedAddons.length > 0) {
+          const addonNames = doc.selectedAddons
+            .map(id => addons.find(a => a.id === id)?.name)
+            .filter(Boolean);
+          finalCustomerName += ` [+ ${addonNames.join(', ')}]`;
+        }
+
+        // Add to orders table
+        const { error: dbError } = await supabase
+          .from('orders')
+          .insert({
+            shop_id: resolvedParams.shopId,
+            customer_id: user?.id,
+            file_path: filePath,
+            quantity: doc.quantity,
+            color_mode: doc.printType,
+            status: 'pending',
+            customer_name: finalCustomerName,
+            customer_phone: phone || '',
+            total_cost: doc.itemCost
+          });
+
+        if (dbError) throw dbError;
+
+        // Log the upload file size and timestamp to localStorage for admin metrics auditing
+        if (typeof window !== 'undefined') {
+          const uploadLog = {
+            shopId: resolvedParams.shopId,
+            size: doc.file.size,
+            timestamp: Date.now()
+          };
+          const storedLogs = localStorage.getItem('xeroxflow_storage_logs');
+          let logs = [];
+          if (storedLogs) {
+            try {
+              logs = JSON.parse(storedLogs);
+            } catch (e) {}
+          }
+          logs.push(uploadLog);
+          const fortyEightHoursAgo = Date.now() - 48 * 60 * 60 * 1000;
+          logs = logs.filter((log: any) => log.timestamp >= fortyEightHoursAgo);
+          localStorage.setItem('xeroxflow_storage_logs', JSON.stringify(logs));
+        }
       }
 
+      setSubmittedDocCount(docsToUpload.length);
       setIsSuccess(true);
     } catch (err: any) {
       setErrorMsg(err.message || 'An error occurred during upload.');
@@ -356,10 +484,6 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
   };
 
   if (isSuccess) {
-    const upiLink = shopInfo?.upi_id 
-      ? `upi://pay?pa=${shopInfo.upi_id}&pn=${encodeURIComponent(shopInfo.store_name || 'Print Shop')}&am=${totalCost.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Print Order for ${name}`)}`
-      : '';
-
     return (
       <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
         {/* Background decorations */}
@@ -371,26 +495,23 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
           <h1 className="text-3xl font-extrabold text-slate-900 mb-2 text-center">Sent Successfully!</h1>
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-6 w-full text-center">
             <p className="text-slate-500 text-sm mb-2">Total Amount</p>
-            <p className="text-4xl font-black text-slate-900 mb-4">₹{totalCost.toFixed(2)}</p>
-            <p className="text-slate-600 text-sm mb-6">
-              Please show your name (<strong>{name}</strong>) to the shop owner after you receive your prints to collect.
+            <p className="text-4xl font-black text-slate-900 mb-4">₹{grandTotalCost.toFixed(2)}</p>
+            <p className="text-slate-600 text-sm mb-2">
+              Please show your name (<strong>{name}</strong>) to the shop owner after you receive your {submittedDocCount > 1 ? `${submittedDocCount} print orders` : 'prints'} to collect.
             </p>
-            
-            {upiLink && totalCost > 0 && (
-              <a 
-                href={upiLink}
-                className="flex items-center justify-center space-x-2 w-full bg-yellow-400 text-black px-6 py-3.5 rounded-xl font-bold hover:bg-yellow-500 transition shadow-sm cursor-pointer"
-              >
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="w-5 h-5 text-black" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-                <span>Pay ₹{totalCost.toFixed(2)} via UPI</span>
-              </a>
-            )}
           </div>
           <button 
-            onClick={() => { setIsSuccess(false); setFile(null); setReviewSubmitted(false); }}
-            className="w-full bg-yellow-400 text-black px-6 py-3.5 rounded-xl font-bold hover:bg-yellow-500 transition cursor-pointer border-none shadow-sm"
+            onClick={() => { 
+              setIsSuccess(false); 
+              setFile(null); 
+              setAttachedDocs([]); 
+              setReviewSubmitted(false);
+              // Note: 'name' and 'phone' are kept intact so customer can attach another document under the same name!
+            }}
+            className="w-full bg-yellow-400 text-black px-6 py-3.5 rounded-xl font-bold hover:bg-yellow-500 transition cursor-pointer border-none shadow-sm flex items-center justify-center gap-2"
           >
-            Send Another Document
+            <Plus className="w-5 h-5" />
+            <span>Attach Another Document</span>
           </button>
 
           {!reviewSubmitted && (
@@ -517,6 +638,8 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
     );
   }
 
+  const totalBatchDocsCount = attachedDocs.length + (file ? 1 : 0);
+
   return (
     <div className="min-h-screen bg-white font-sans text-slate-900 flex flex-col items-center py-10 px-4 relative overflow-hidden">
       {/* Background decorations */}
@@ -544,7 +667,7 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
           </Link>
         </div>
 
-        <form onSubmit={handleUpload} className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 w-full flex flex-col space-y-5">
+        <form onSubmit={handleOpenSummaryModal} className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 w-full flex flex-col space-y-5">
           
           {errorMsg && (
             <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm text-center">
@@ -552,89 +675,104 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
             </div>
           )}
 
-          {/* Dropbox File Upload Box */}
-          <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:bg-slate-50 hover:border-yellow-400 transition-colors relative cursor-pointer">
+          {/* Attached Documents List (If any attached docs exist) */}
+          {attachedDocs.length > 0 && (
+            <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Attached Documents ({attachedDocs.length})
+                </span>
+                <span className="text-xs font-extrabold text-slate-900 bg-yellow-300/80 px-2 py-0.5 rounded border border-yellow-400">
+                  ₹{attachedTotalCost.toFixed(2)} Subtotal
+                </span>
+              </div>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                {attachedDocs.map((doc) => (
+                  <div key={doc.id} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl text-xs font-medium shadow-2xs">
+                    <div className="flex items-center space-x-2.5 min-w-0 pr-2">
+                      <FileText className="w-5 h-5 text-yellow-500 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-900 truncate">{doc.file.name}</p>
+                        <p className="text-[11px] text-slate-500">
+                          {doc.selectedPagesCount} Pgs • {doc.quantity} Cop{doc.quantity > 1 ? 'ies' : 'y'} • {doc.printType.replace('_', ' ').toUpperCase()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <span className="font-extrabold text-slate-900">₹{doc.itemCost.toFixed(2)}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveAttachedDoc(doc.id)}
+                        className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition border-none bg-transparent cursor-pointer shrink-0"
+                        title="Remove document"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Document Picker Dropzone */}
+          <div className="relative border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-yellow-400 transition-colors bg-slate-50/50">
             <input 
               type="file" 
-              onChange={handleFileChange} 
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               accept=".pdf"
-              required
+              onChange={handleFileChange}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
-            <FileText className={`w-10 h-10 mb-3 ${file ? 'text-yellow-500 animate-bounce' : 'text-slate-400'}`} />
-            {file ? (
-              <div className="flex flex-col items-center">
-                <span className="text-sm font-semibold text-slate-900 bg-yellow-100 px-3 py-1 rounded-full overflow-hidden text-ellipsis max-w-[200px] whitespace-nowrap">
-                  {file.name}
-                </span>
-                {pdfPageCount !== null ? (
-                  <span className="text-xs font-bold text-yellow-700 bg-yellow-50 px-2.5 py-0.5 rounded-md mt-2 border border-yellow-200">
-                    📄 {pdfPageCount} Page{pdfPageCount > 1 ? 's' : ''} Detected
-                  </span>
-                ) : (
-                  <span className="text-xs text-slate-500 mt-2">Reading PDF pages...</span>
-                )}
+            
+            <FileText className="w-10 h-10 text-yellow-500 mx-auto mb-2" />
+            <p className="text-sm font-bold text-slate-700">
+              {file ? file.name : (attachedDocs.length > 0 ? 'Attach Another PDF Document' : 'Click to Upload PDF Document')}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">PDF files only (Max 20MB)</p>
+            {pdfPageCount !== null && (
+              <div className="mt-2 inline-flex items-center space-x-1.5 bg-yellow-100/80 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200 animate-fade-in">
+                <span>📄 {pdfPageCount} {pdfPageCount === 1 ? 'Page' : 'Pages'} Detected</span>
               </div>
-            ) : (
-              <>
-                <span className="text-sm font-semibold text-slate-700">Tap to select a PDF</span>
-                <span className="text-xs text-slate-400 mt-1">Maximum size: 25MB</span>
-              </>
             )}
           </div>
 
-          {/* Page Selection Options (All / Range / Custom Specific Pages) */}
+          {/* Page Selection Controls */}
           {file && (
             <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
               <div className="flex items-center justify-between">
-                <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                   Pages to Print
                 </span>
-                <span className="text-xs font-extrabold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">
-                  {selectedPagesCount} Page{selectedPagesCount > 1 ? 's' : ''} Selected
+                <span className="text-xs font-extrabold text-slate-900 bg-yellow-300/80 px-2 py-0.5 rounded border border-yellow-400">
+                  {selectedPagesCount} {selectedPagesCount === 1 ? 'Page' : 'Pages'} Selected
                 </span>
               </div>
 
-              {/* Mode Buttons */}
-              <div className="grid grid-cols-3 gap-1.5 text-xs font-bold">
+              <div className="grid grid-cols-3 gap-1.5 bg-slate-200/60 p-1 rounded-xl text-xs font-bold text-slate-700">
                 <button
                   type="button"
                   onClick={() => setPageSelectionMode('all')}
-                  className={`py-2 px-2 rounded-xl border transition-all cursor-pointer text-center text-[11px] ${
-                    pageSelectionMode === 'all'
-                      ? 'bg-yellow-400 border-yellow-400 text-slate-950 shadow-xs font-black'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
-                  }`}
+                  className={`py-1.5 rounded-lg transition-all border-none cursor-pointer ${pageSelectionMode === 'all' ? 'bg-yellow-400 text-black shadow-xs' : 'hover:bg-slate-200/80 bg-transparent'}`}
                 >
-                  All Pages ({pdfPageCount || 1})
+                  All Pages {pdfPageCount ? `(${pdfPageCount})` : ''}
                 </button>
-
                 <button
                   type="button"
                   onClick={() => setPageSelectionMode('range')}
-                  className={`py-2 px-2 rounded-xl border transition-all cursor-pointer text-center text-[11px] ${
-                    pageSelectionMode === 'range'
-                      ? 'bg-yellow-400 border-yellow-400 text-slate-950 shadow-xs font-black'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
-                  }`}
+                  className={`py-1.5 rounded-lg transition-all border-none cursor-pointer ${pageSelectionMode === 'range' ? 'bg-yellow-400 text-black shadow-xs' : 'hover:bg-slate-200/80 bg-transparent'}`}
                 >
                   Page Range
                 </button>
-
                 <button
                   type="button"
                   onClick={() => setPageSelectionMode('custom')}
-                  className={`py-2 px-2 rounded-xl border transition-all cursor-pointer text-center text-[11px] ${
-                    pageSelectionMode === 'custom'
-                      ? 'bg-yellow-400 border-yellow-400 text-slate-950 shadow-xs font-black'
-                      : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
-                  }`}
+                  className={`py-1.5 rounded-lg transition-all border-none cursor-pointer ${pageSelectionMode === 'custom' ? 'bg-yellow-400 text-black shadow-xs' : 'hover:bg-slate-200/80 bg-transparent'}`}
                 >
                   Specific Pages
                 </button>
               </div>
 
-              {/* Range Mode Input (From - To) */}
+              {/* Page Range Inputs */}
               {pageSelectionMode === 'range' && (
                 <div className="grid grid-cols-2 gap-3 pt-1 animate-fade-in">
                   <div>
@@ -642,9 +780,9 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
                     <input
                       type="number"
                       min="1"
-                      max={pdfPageCount || 9999}
+                      max={pdfPageCount || undefined}
                       value={fromPage}
-                      onChange={(e) => setFromPage(parseInt(e.target.value) || 1)}
+                      onChange={(e) => setFromPage(Math.max(1, parseInt(e.target.value) || 1))}
                       className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white"
                     />
                   </div>
@@ -653,27 +791,12 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
                     <input
                       type="number"
                       min={fromPage}
-                      max={pdfPageCount || 9999}
+                      max={pdfPageCount || undefined}
                       value={toPage}
-                      onChange={(e) => setToPage(parseInt(e.target.value) || 1)}
+                      onChange={(e) => setToPage(Math.max(fromPage, parseInt(e.target.value) || fromPage))}
                       className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white"
                     />
                   </div>
-                </div>
-              )}
-
-              {/* Custom Pages Input */}
-              {pageSelectionMode === 'custom' && (
-                <div className="pt-1 animate-fade-in">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Enter Page Numbers / Ranges</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 1-5, 8, 11-13"
-                    value={customPagesInput}
-                    onChange={(e) => setCustomPagesInput(e.target.value)}
-                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1 font-medium">Use commas and hyphens (e.g. 1-3, 5, 8-10)</p>
                 </div>
               )}
             </div>
@@ -718,36 +841,49 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
             </div>
           )}
 
-          {/* Copies & Print Type Settings (Side-by-side in grid) */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Copies/Pages</label>
-              <input 
-                type="number" 
-                min="1"
-                value={quantity}
-                onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
-                required
-                className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 focus:outline-none text-slate-900 text-sm font-medium"
-              />
+          {/* Copies & Print Type Settings */}
+          {file && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Copies</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  value={quantity}
+                  onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                  className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 focus:outline-none text-slate-900 text-sm font-medium"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Print Type</label>
+                <select 
+                  value={printType}
+                  onChange={(e) => setPrintType(e.target.value)}
+                  className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 focus:outline-none bg-white text-slate-900 text-sm font-medium"
+                >
+                  <option value="bw">B&W (Single)</option>
+                  <option value="bw_double">B&W (Double)</option>
+                  <option value="color">Color (Single)</option>
+                  <option value="color_double">Color (Double)</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Print Type</label>
-              <select 
-                value={printType}
-                onChange={(e) => setPrintType(e.target.value)}
-                className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 focus:outline-none bg-white text-slate-900 text-sm font-medium"
-              >
-                <option value="bw">B&W (Single)</option>
-                <option value="bw_double">B&W (Double)</option>
-                <option value="color">Color (Single)</option>
-                <option value="color_double">Color (Double)</option>
-              </select>
-            </div>
-          </div>
+          )}
 
-          {/* Name & Phone Fields (Name above Phone) */}
-          <div className="space-y-4">
+          {/* Button to attach current document */}
+          {file && (
+            <button
+              type="button"
+              onClick={handleAttachAnother}
+              className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3 rounded-xl transition cursor-pointer border border-slate-200 flex items-center justify-center gap-2 text-sm shadow-xs"
+            >
+              <Plus className="w-4 h-4 text-slate-700" />
+              <span>Attach Document</span>
+            </button>
+          )}
+
+          {/* Name & Phone Fields */}
+          <div className="space-y-4 pt-1">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Your Name</label>
               <input 
@@ -773,28 +909,141 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
             </div>
           </div>
 
-          {appliedBulkRate !== null && (
-            <div className="bg-green-50 border border-green-200 text-green-800 p-2.5 rounded-xl text-xs font-bold flex items-center justify-between animate-in fade-in">
-              <span>🏷️ Bulk Discount Applied!</span>
-              <span className="font-extrabold text-green-700 bg-white px-2 py-0.5 rounded border border-green-200">
-                ₹{appliedBulkRate.toFixed(2)} / page
-              </span>
-            </div>
-          )}
-
+          {/* Submit */}
           <button 
             type="submit" 
-            disabled={!file || uploading || !name}
+            disabled={totalBatchDocsCount === 0 || uploading || !name}
             className="w-full bg-yellow-400 text-black font-bold py-3.5 rounded-xl hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex justify-between items-center px-6 mt-2 cursor-pointer shadow-sm border-none"
           >
-            <span>{uploading ? 'Sending...' : 'Send to Printer Queue'}</span>
+            <span>Review Order</span>
             {!uploading && (
               <span className="bg-black/10 px-3 py-1 rounded-lg text-sm font-bold">
-                ₹{totalCost.toFixed(2)}
+                ₹{grandTotalCost.toFixed(2)}
               </span>
             )}
           </button>
         </form>
+
+        {/* Modal: Order Summary & Print Settings Confirmation */}
+        {isSummaryModalOpen && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl w-full max-w-md text-left space-y-4 animate-scale-in relative max-h-[90vh] overflow-y-auto">
+              <button 
+                onClick={() => setIsSummaryModalOpen(false)}
+                className="absolute right-5 top-5 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition border-none bg-transparent cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center space-x-3 pb-3 border-b border-slate-100 pr-8">
+                <div className="bg-yellow-100 p-2.5 rounded-2xl text-yellow-700 shrink-0">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-950 uppercase tracking-wide leading-tight">
+                    Please review your settings before submitting
+                  </h3>
+                </div>
+              </div>
+
+              {/* Documents List */}
+              <div className="space-y-2">
+                <span className="block text-[11px] font-black text-slate-500 uppercase tracking-wider">
+                  Configured Documents ({totalBatchDocsCount})
+                </span>
+                <div className="space-y-2.5 max-h-[40vh] overflow-y-auto pr-1">
+                  {[...attachedDocs, ...(file ? [{
+                    id: 'active_doc',
+                    file,
+                    pdfPageCount,
+                    pageSelectionMode,
+                    fromPage,
+                    toPage,
+                    customPagesInput,
+                    selectedPagesCount,
+                    quantity,
+                    printType,
+                    selectedAddons: [...selectedAddons],
+                    itemCost: currentDocCost
+                  }] : [])].map((doc, idx) => {
+                    let pageText = 'All Pages';
+                    if (doc.pageSelectionMode === 'range') pageText = `Pages ${doc.fromPage} - ${doc.toPage}`;
+                    else if (doc.pageSelectionMode === 'custom') pageText = `Pages ${doc.customPagesInput || 'Custom'}`;
+                    else if (doc.pdfPageCount) pageText = `All ${doc.pdfPageCount} Pages`;
+
+                    const formatPrintTypeLabel = (t: string) => {
+                      if (t === 'bw') return 'B&W (Single)';
+                      if (t === 'bw_double') return 'B&W (Double)';
+                      if (t === 'color') return 'Color (Single)';
+                      if (t === 'color_double') return 'Color (Double)';
+                      return t;
+                    };
+
+                    const addonNames = doc.selectedAddons
+                      .map(id => addons.find(a => a.id === id)?.name)
+                      .filter(Boolean);
+
+                    return (
+                      <div key={doc.id || idx} className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200/90 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-black text-slate-900 truncate" title={doc.file.name}>{doc.file.name}</p>
+                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">{pageText}</p>
+                          </div>
+                          <span className="text-xs font-black text-yellow-600 shrink-0 bg-yellow-50 px-2 py-0.5 rounded-lg border border-yellow-200">
+                            ₹{doc.itemCost.toFixed(2)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center space-x-2 text-[11px] text-slate-600 font-medium pt-1 border-t border-slate-200/60">
+                          <span>Print Mode: <strong className="text-slate-900">{formatPrintTypeLabel(doc.printType)}</strong></span>
+                          <span>•</span>
+                          <span>Copies: <strong className="text-slate-900">{doc.quantity}</strong></span>
+                        </div>
+
+                        {addonNames.length > 0 && (
+                          <div className="text-[11px] text-purple-700 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-100 font-semibold">
+                            Add-ons: {addonNames.join(', ')}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Total Amount Card */}
+              <div className="bg-slate-950 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-xs">
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Grand Total</p>
+                  <p className="text-[11px] text-slate-300 font-medium">{totalBatchDocsCount} {totalBatchDocsCount > 1 ? 'Files' : 'File'} Configured</p>
+                </div>
+                <p className="text-xl font-black text-yellow-400">₹{grandTotalCost.toFixed(2)}</p>
+              </div>
+
+              {/* Actions */}
+              <div className="space-y-2 pt-1">
+                <button
+                  type="button"
+                  onClick={executeFinalUpload}
+                  disabled={uploading}
+                  className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-black py-3.5 rounded-xl transition shadow-sm cursor-pointer border-none text-xs uppercase tracking-wider disabled:opacity-50"
+                >
+                  {uploading ? 'Sending to Queue...' : 'Confirm & Submit to Queue'}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsSummaryModalOpen(false)}
+                  disabled={uploading}
+                  className="w-full bg-white hover:bg-slate-50 text-slate-700 font-bold py-2.5 rounded-xl border border-slate-200 transition cursor-pointer text-xs disabled:opacity-50"
+                >
+                  Edit Order / Go Back
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         
         <p className="text-xs text-slate-400 mt-8 text-center px-4">
           Documents are encrypted and automatically deleted 10 minutes after upload to protect your privacy.
@@ -803,3 +1052,4 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
     </div>
   );
 }
+

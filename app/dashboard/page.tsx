@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
-import { Printer, FileText, CheckCircle, Edit2, Star, MapPin, LogOut, Upload, X, Shield, Scissors, Plus, Layers, Trash2, Tag } from 'lucide-react';
+import { Printer, FileText, CheckCircle, Edit2, Star, MapPin, LogOut, Upload, X, Shield, Scissors, Plus, Layers, Trash2, Tag, User, ChevronDown, ChevronUp } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { PDFDocument } from 'pdf-lib';
 
@@ -51,11 +51,14 @@ interface RecentOrder {
   completedAt: number;
 }
 
-interface BulkPriceRule {
+interface PriceTier {
   id: string;
-  minPages: number;
-  printType: string;
-  pricePerPage: number;
+  fromPage: number;
+  toPage: number | null;
+  pricingBwSingle: number;
+  pricingBwDouble: number;
+  pricingColorSingle: number;
+  pricingColorDouble: number;
 }
 
 export default function DashboardPage() {
@@ -63,22 +66,164 @@ export default function DashboardPage() {
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [timerTick, setTimerTick] = useState<number>(0);
   const [isRecentsModalOpen, setIsRecentsModalOpen] = useState(false);
+  const [isShopPricingOpen, setIsShopPricingOpen] = useState(false);
+  const [isAddonsDropdownOpen, setIsAddonsDropdownOpen] = useState(false);
 
-  // Bulk Pricing Rules State
-  const [bulkPrices, setBulkPrices] = useState<BulkPriceRule[]>([]);
-  const [isAddBulkOpen, setIsAddBulkOpen] = useState(false);
-  const [isViewBulkOpen, setIsViewBulkOpen] = useState(false);
+  // Page Range Price Tiers State & Selection
+  const [priceTiers, setPriceTiers] = useState<PriceTier[]>([]);
+  const [selectedTierId, setSelectedTierId] = useState<string>('');
 
-  const [bulkMinPages, setBulkMinPages] = useState('50');
-  const [bulkPrintType, setBulkPrintType] = useState('all');
-  const [bulkPricePerPage, setBulkPricePerPage] = useState('1.5');
+  // Add / Edit Pricing Modal state
+  const [isAddPricingModalOpen, setIsAddPricingModalOpen] = useState(false);
+  const [editingTierId, setEditingTierId] = useState<string | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [newFromPage, setNewFromPage] = useState('1');
+  const [newToPage, setNewToPage] = useState('50');
+  const [newPricingBwSingle, setNewPricingBwSingle] = useState('2');
+  const [newPricingBwDouble, setNewPricingBwDouble] = useState('3');
+  const [newPricingColorSingle, setNewPricingColorSingle] = useState('5');
+  const [newPricingColorDouble, setNewPricingColorDouble] = useState('8');
 
   const [shopName, setShopName] = useState('Loading...');
   const [pricingBwSingle, setPricingBwSingle] = useState('0');
   const [pricingBwDouble, setPricingBwDouble] = useState('0');
   const [pricingColorSingle, setPricingColorSingle] = useState('0');
   const [pricingColorDouble, setPricingColorDouble] = useState('0');
-  const [upiId, setUpiId] = useState('');
+
+  const activeTier = priceTiers.find(t => t.id === selectedTierId) || priceTiers[0];
+
+  const handleOpenAddPricingModal = () => {
+    setEditingTierId(null);
+    setModalError(null);
+    const lastTier = priceTiers[priceTiers.length - 1];
+    const nextFrom = lastTier && lastTier.toPage ? lastTier.toPage + 1 : (lastTier ? lastTier.fromPage + 50 : 1);
+    setNewFromPage(nextFrom.toString());
+    setNewToPage((nextFrom + 49).toString());
+    setNewPricingBwSingle(lastTier ? lastTier.pricingBwSingle.toString() : '2');
+    setNewPricingBwDouble(lastTier ? lastTier.pricingBwDouble.toString() : '3');
+    setNewPricingColorSingle(lastTier ? lastTier.pricingColorSingle.toString() : '5');
+    setNewPricingColorDouble(lastTier ? lastTier.pricingColorDouble.toString() : '8');
+    setIsAddPricingModalOpen(true);
+  };
+
+  const handleOpenEditPricingModal = (tier: PriceTier) => {
+    setEditingTierId(tier.id);
+    setModalError(null);
+    setNewFromPage(tier.fromPage.toString());
+    setNewToPage(tier.toPage !== null ? tier.toPage.toString() : '');
+    setNewPricingBwSingle(tier.pricingBwSingle.toString());
+    setNewPricingBwDouble(tier.pricingBwDouble.toString());
+    setNewPricingColorSingle(tier.pricingColorSingle.toString());
+    setNewPricingColorDouble(tier.pricingColorDouble.toString());
+    setIsAddPricingModalOpen(true);
+  };
+
+  const handleSaveNewPricingModal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setModalError(null);
+
+    const fromP = parseInt(newFromPage) || 1;
+    const toP = newToPage.trim() === '' ? null : (parseInt(newToPage) || null);
+    const bwSingle = parseFloat(newPricingBwSingle) || 0;
+    const bwDouble = parseFloat(newPricingBwDouble) || 0;
+    const colorSingle = parseFloat(newPricingColorSingle) || 0;
+    const colorDouble = parseFloat(newPricingColorDouble) || 0;
+
+    // 1. Check basic page bounds
+    if (toP !== null && fromP > toP) {
+      setModalError(`Invalid Range: "From Page" (${fromP}) cannot be greater than "To Page" (${toP}).`);
+      return;
+    }
+
+    // 2. Overlap Check against all existing tiers (except the one currently being edited)
+    const otherTiers = priceTiers.filter(t => t.id !== editingTierId);
+    const newMax = toP === null ? Infinity : toP;
+
+    for (const existing of otherTiers) {
+      const existMax = existing.toPage === null ? Infinity : existing.toPage;
+      // Overlap condition: (fromP <= existMax) && (existing.fromPage <= newMax)
+      const hasOverlap = (fromP <= existMax) && (existing.fromPage <= newMax);
+
+      if (hasOverlap) {
+        const existStr = `${existing.fromPage} - ${existing.toPage ? existing.toPage + ' Pages' : '∞ Pages'}`;
+        const newStr = `${fromP} - ${toP ? toP + ' Pages' : '∞ Pages'}`;
+        setModalError(`Overlapping Range Error: Range (${newStr}) overlaps with existing range (${existStr}). Multiple prices cannot be assigned to overlapping page ranges.`);
+        return;
+      }
+    }
+
+    let updatedTiers: PriceTier[] = [];
+
+    if (editingTierId) {
+      // Edit existing tier
+      updatedTiers = priceTiers.map(t => t.id === editingTierId ? {
+        ...t,
+        fromPage: fromP,
+        toPage: toP,
+        pricingBwSingle: bwSingle,
+        pricingBwDouble: bwDouble,
+        pricingColorSingle: colorSingle,
+        pricingColorDouble: colorDouble
+      } : t);
+    } else {
+      const newTier: PriceTier = {
+        id: Date.now().toString() + '_' + Math.random().toString(36).substring(2, 6),
+        fromPage: fromP,
+        toPage: toP,
+        pricingBwSingle: bwSingle,
+        pricingBwDouble: bwDouble,
+        pricingColorSingle: colorSingle,
+        pricingColorDouble: colorDouble
+      };
+      updatedTiers = [...priceTiers, newTier];
+      setSelectedTierId(newTier.id);
+    }
+
+    // Keep tiers sorted by fromPage ascending
+    updatedTiers.sort((a, b) => a.fromPage - b.fromPage);
+
+    setPriceTiers(updatedTiers);
+
+    if (userId) {
+      localStorage.setItem(`xeroxflow_price_tiers_${userId}`, JSON.stringify(updatedTiers));
+      const baseTier = updatedTiers[0];
+      if (baseTier) {
+        await supabase.from('shops').update({
+          pricing_bw: baseTier.pricingBwSingle,
+          pricing_bw_double: baseTier.pricingBwDouble,
+          pricing_color: baseTier.pricingColorSingle,
+          pricing_color_double: baseTier.pricingColorDouble
+        }).eq('id', userId);
+      }
+    }
+
+    setIsAddPricingModalOpen(false);
+    setEditingTierId(null);
+    setModalError(null);
+  };
+
+  const handleRemovePriceTier = async (id: string) => {
+    const updatedTiers = priceTiers.filter(t => t.id !== id);
+    setPriceTiers(updatedTiers);
+    if (updatedTiers.length > 0) {
+      setSelectedTierId(updatedTiers[0].id);
+    } else {
+      setSelectedTierId('');
+    }
+
+    if (userId) {
+      localStorage.setItem(`xeroxflow_price_tiers_${userId}`, JSON.stringify(updatedTiers));
+      if (updatedTiers.length > 0) {
+        const baseTier = updatedTiers[0];
+        await supabase.from('shops').update({
+          pricing_bw: baseTier.pricingBwSingle,
+          pricing_bw_double: baseTier.pricingBwDouble,
+          pricing_color: baseTier.pricingColorSingle,
+          pricing_color_double: baseTier.pricingColorDouble
+        }).eq('id', userId);
+      }
+    }
+  };
   
   // Custom interactive banner settings
   const [location, setLocation] = useState('Near Market Yard, Pune, Maharashtra.');
@@ -257,22 +402,39 @@ export default function DashboardPage() {
         setSubExpiresAt(shopData.subscription_expires_at || null);
         setSubPlanName(shopData.subscription_plan_name || null);
         if (shopData.pricing_bw !== null) setPricingBwSingle(shopData.pricing_bw.toString());
-        // Pull double prices directly from DB if the columns exist, otherwise fallback to 0
         if (shopData.pricing_bw_double !== undefined && shopData.pricing_bw_double !== null) {
           setPricingBwDouble(shopData.pricing_bw_double.toString());
         }
-        
         if (shopData.pricing_color !== null) setPricingColorSingle(shopData.pricing_color.toString());
         if (shopData.pricing_color_double !== undefined && shopData.pricing_color_double !== null) {
           setPricingColorDouble(shopData.pricing_color_double.toString());
         }
-        
-        if (shopData.upi_id) setUpiId(shopData.upi_id);
 
-        // Store a snapshot of what came from the DB to compare later
+        // Initialize priceTiers
+        const storedTiers = localStorage.getItem(`xeroxflow_price_tiers_${session.user.id}`);
+        if (storedTiers) {
+          try {
+            const parsed = JSON.parse(storedTiers);
+            setPriceTiers(parsed);
+            if (parsed.length > 0) setSelectedTierId(parsed[0].id);
+          } catch (e) {}
+        } else {
+          const defaultTier: PriceTier = {
+            id: 'tier_default',
+            fromPage: 1,
+            toPage: null,
+            pricingBwSingle: shopData.pricing_bw ?? 2,
+            pricingBwDouble: shopData.pricing_bw_double ?? 3,
+            pricingColorSingle: shopData.pricing_color ?? 5,
+            pricingColorDouble: shopData.pricing_color_double ?? 8,
+          };
+          setPriceTiers([defaultTier]);
+          setSelectedTierId('tier_default');
+          localStorage.setItem(`xeroxflow_price_tiers_${session.user.id}`, JSON.stringify([defaultTier]));
+        }
+
         setInitialData({
           store_name: shopData.store_name,
-          upi_id: shopData.upi_id || '',
           pricing_bw: shopData.pricing_bw !== null ? shopData.pricing_bw.toString() : '0',
           pricing_bw_double: shopData.pricing_bw_double !== null && shopData.pricing_bw_double !== undefined ? shopData.pricing_bw_double.toString() : '0',
           pricing_color: shopData.pricing_color !== null ? shopData.pricing_color.toString() : '0',
@@ -310,7 +472,6 @@ export default function DashboardPage() {
     if (initialData) {
       const isChanged = 
         shopName !== initialData.store_name ||
-        upiId !== initialData.upi_id ||
         pricingBwSingle !== initialData.pricing_bw ||
         pricingBwDouble !== initialData.pricing_bw_double ||
         pricingColorSingle !== initialData.pricing_color ||
@@ -318,7 +479,7 @@ export default function DashboardPage() {
 
       setHasChanges(isChanged);
     }
-  }, [shopName, upiId, pricingBwSingle, pricingBwDouble, pricingColorSingle, pricingColorDouble, initialData]);
+  }, [shopName, pricingBwSingle, pricingBwDouble, pricingColorSingle, pricingColorDouble, initialData]);
 
   // Load stored recent orders & bulk prices from localStorage
   useEffect(() => {
@@ -334,43 +495,8 @@ export default function DashboardPage() {
         } catch (e) {}
       }
 
-      const storedBulk = localStorage.getItem(`xeroxflow_bulk_prices_${userId}`);
-      if (storedBulk) {
-        try { setBulkPrices(JSON.parse(storedBulk)); } catch (e) {}
-      }
     }
   }, [userId]);
-
-  const handleAddBulkRule = (e: React.FormEvent) => {
-    e.preventDefault();
-    const minPages = parseInt(bulkMinPages);
-    const price = parseFloat(bulkPricePerPage);
-    if (isNaN(minPages) || isNaN(price)) return;
-
-    const newRule: BulkPriceRule = {
-      id: Date.now().toString(),
-      minPages,
-      printType: bulkPrintType,
-      pricePerPage: price
-    };
-
-    const updated = [...bulkPrices, newRule];
-    setBulkPrices(updated);
-    if (userId) {
-      localStorage.setItem(`xeroxflow_bulk_prices_${userId}`, JSON.stringify(updated));
-    }
-    setIsAddBulkOpen(false);
-    setBulkMinPages('50');
-    setBulkPricePerPage('1.5');
-  };
-
-  const handleDeleteBulkRule = (id: string) => {
-    const updated = bulkPrices.filter(r => r.id !== id);
-    setBulkPrices(updated);
-    if (userId) {
-      localStorage.setItem(`xeroxflow_bulk_prices_${userId}`, JSON.stringify(updated));
-    }
-  };
 
   // Recents Queue 1-second ticker (updates countdown & auto-deletes after 3 min)
   useEffect(() => {
@@ -497,38 +623,36 @@ export default function DashboardPage() {
   };
 
   const handleSavePricing = async () => {
-    if (!hasChanges) return;
-    
     setSaving(true);
     if (!userId) return;
 
     try {
+      // 1. Save all price tiers to local storage
+      localStorage.setItem(`xeroxflow_price_tiers_${userId}`, JSON.stringify(priceTiers));
+
+      // 2. Sync Tier 1 values to shops table
+      const baseTier = priceTiers[0] || {
+        pricingBwSingle: 2,
+        pricingBwDouble: 3,
+        pricingColorSingle: 5,
+        pricingColorDouble: 8,
+      };
+
       await supabase
         .from('shops')
         .update({ 
           store_name: shopName,
-          upi_id: upiId,
-          pricing_bw: parseFloat(pricingBwSingle),
-          pricing_bw_double: parseFloat(pricingBwDouble),
-          pricing_color: parseFloat(pricingColorSingle),
-          pricing_color_double: parseFloat(pricingColorDouble)
+          pricing_bw: baseTier.pricingBwSingle,
+          pricing_bw_double: baseTier.pricingBwDouble,
+          pricing_color: baseTier.pricingColorSingle,
+          pricing_color_double: baseTier.pricingColorDouble
         })
         .eq('id', userId);
         
       setIsEditingName(false);
-      
-      // Update our snapshot to match what we just saved to the DB
-      setInitialData({
-        store_name: shopName,
-        upi_id: upiId,
-        pricing_bw: pricingBwSingle,
-        pricing_bw_double: pricingBwDouble,
-        pricing_color: pricingColorSingle,
-        pricing_color_double: pricingColorDouble,
-      });
       setHasChanges(false);
       
-      alert('Shop details saved successfully!');
+      alert('Shop pricing & page ranges saved successfully!');
     } catch (err) {
       console.error(err);
       alert('Failed to save settings.');
@@ -697,111 +821,209 @@ export default function DashboardPage() {
           <span className="text-[10px] text-slate-400 font-bold mt-1 tracking-wider uppercase ml-12">Smart Printing. Simplified.</span>
         </Link>
             <div className="p-6 flex-1 overflow-y-auto">
-          {/* QR Code Section */}
-          <div className="mb-8 flex flex-col items-center">
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 mb-4 inline-block shadow-sm">
+          {/* QR Code Section - Tappable */}
+          <div className="mb-6 flex flex-col items-center">
+            <button 
+              type="button"
+              onClick={handlePrintQR}
+              title="Click to Print or Download QR Code"
+              className="bg-white p-4 rounded-2xl border border-slate-200 mb-3 inline-block shadow-sm hover:border-yellow-400 hover:shadow-md hover:scale-105 active:scale-95 transition-all cursor-pointer group relative border-none"
+            >
               {userId && origin ? (
                 <QRCode value={`${origin}/shop/${userId}`} size={120} level="H" />
               ) : (
                 <div className="w-[120px] h-[120px] bg-slate-100 rounded animate-pulse" />
               )}
-            </div>
+              <span className="block text-[10px] font-bold text-slate-500 group-hover:text-yellow-600 mt-2 text-center transition-colors">
+                🖨️ Tap to Print / Download QR
+              </span>
+            </button>
             
-            <div className="flex flex-col items-center space-y-2.5 w-full">
-              <button 
-                onClick={handlePrintQR}
-                className="w-full text-xs font-bold text-black bg-yellow-400 hover:bg-yellow-500 px-4 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-sm border-none"
+            {userId && origin && (
+              <a 
+                href={`${origin}/shop/${userId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-bold text-yellow-600 hover:text-yellow-700 flex items-center gap-1 hover:underline cursor-pointer"
               >
-                <Printer className="w-4 h-4" />
-                Print / Download QR
-              </button>
-              
-              {userId && origin && (
-                <a 
-                  href={`${origin}/shop/${userId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-bold text-yellow-600 hover:text-yellow-700 flex items-center gap-1 hover:underline cursor-pointer"
-                >
-                  Open Customer Dropbox ↗
-                </a>
+                Open Customer Dropbox ↗
+              </a>
+            )}
+          </div>
+
+          {/* Collapsible Pricing Dropdown Header */}
+          <button 
+            type="button"
+            onClick={() => setIsShopPricingOpen(!isShopPricingOpen)}
+            className="w-full flex items-center justify-between py-2 border-b border-slate-100 mb-3 text-xs font-bold text-slate-500 hover:text-slate-900 uppercase tracking-wider transition-colors cursor-pointer bg-transparent border-none text-left select-none"
+          >
+            <div className="flex items-center space-x-1.5">
+              <span>Pricing</span>
+              {hasChanges && (
+                <span className="w-2 h-2 rounded-full bg-yellow-500 animate-ping" />
               )}
             </div>
-
-            <button 
-              onClick={() => setIsEditingAddons(true)}
-              className="w-full text-xs font-bold text-slate-800 border border-slate-200 hover:bg-slate-50 py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 mt-5 cursor-pointer shadow-sm"
-            >
-              <span>Manage Add-ons Menu</span>
-            </button>
-          </div>
-
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Shop & Pricing</h3>
+            {isShopPricingOpen ? (
+              <ChevronUp className="w-4 h-4 text-slate-400" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-slate-400" />
+            )}
+          </button>
           
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">B&W Single (₹)</label>
-                <input type="number" step="0.5" min="0" value={pricingBwSingle} onChange={(e) => {
-                  setPricingBwSingle(e.target.value);
-                }} className="w-full p-2.5 text-sm border border-slate-200 rounded-xl focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 focus:outline-none transition-colors text-slate-900 bg-slate-50 focus:bg-white" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">B&W Double (₹)</label>
-                <input type="number" step="0.5" min="0" value={pricingBwDouble} onChange={(e) => setPricingBwDouble(e.target.value)} className="w-full p-2.5 text-sm border border-slate-200 rounded-xl focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 focus:outline-none transition-colors text-slate-900 bg-slate-50 focus:bg-white" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Color Single (₹)</label>
-                <input type="number" step="0.5" min="0" value={pricingColorSingle} onChange={(e) => {
-                  setPricingColorSingle(e.target.value);
-                }} className="w-full p-2.5 text-sm border border-slate-200 rounded-xl focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 focus:outline-none transition-colors text-slate-900 bg-slate-50 focus:bg-white" />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">Color Double (₹)</label>
-                <input type="number" step="0.5" min="0" value={pricingColorDouble} onChange={(e) => setPricingColorDouble(e.target.value)} className="w-full p-2.5 text-sm border border-slate-200 rounded-xl focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 focus:outline-none transition-colors text-slate-900 bg-slate-50 focus:bg-white" />
-              </div>
-            </div>
-            
-            {/* Bulk Pricing Action Buttons (Right above Store UPI ID) */}
-            <div className="space-y-2 pt-2 border-t border-slate-100">
+          {isShopPricingOpen && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-top-1 duration-150 mb-4 bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200/80">
+              {priceTiers.length === 0 ? (
+                <div className="text-center py-5 border border-dashed border-slate-200 rounded-xl bg-white p-3">
+                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">No Pricing Ranges Added</p>
+                  <p className="text-[11px] text-slate-500 font-medium">Click "Add Pricing" below to add a page range.</p>
+                </div>
+              ) : (
+                <div className="bg-white p-3.5 rounded-xl border border-slate-200/90 shadow-2xs space-y-3.5">
+                  {/* Heading: NO OF PAGES */}
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <span className="text-[11px] font-black text-slate-900 uppercase tracking-wider">
+                      NO OF PAGES
+                    </span>
+                    {activeTier && (
+                      <div className="flex items-center space-x-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditPricingModal(activeTier)}
+                          className="text-[11px] text-slate-600 hover:text-slate-900 font-bold transition border-none bg-transparent cursor-pointer flex items-center gap-1"
+                          title="Edit Range Pricing"
+                        >
+                          <Edit2 className="w-3 h-3 text-slate-500" />
+                          <span>Edit</span>
+                        </button>
+                        {priceTiers.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePriceTier(activeTier.id)}
+                            className="text-[11px] text-red-500 hover:text-red-700 font-bold transition border-none bg-transparent cursor-pointer flex items-center gap-1"
+                            title="Delete Range"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                            <span>Delete</span>
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Dropdown displaying ranges like "1 - 50 Pages", "51 - 100 Pages" */}
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      Select Page Range
+                    </label>
+                    <select
+                      value={selectedTierId}
+                      onChange={(e) => setSelectedTierId(e.target.value)}
+                      className="w-full p-2.5 text-xs font-bold text-slate-900 border border-slate-200 rounded-xl bg-slate-50 focus:bg-white focus:border-yellow-400 focus:outline-none cursor-pointer"
+                    >
+                      {priceTiers.map((tier) => (
+                        <option key={tier.id} value={tier.id}>
+                          {tier.fromPage} - {tier.toPage ? `${tier.toPage} Pages` : '∞ Pages (Unlimited)'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* 4 Pricing Display Fields (Read-Only) for the Selected Page Range */}
+                  {activeTier && (
+                    <div className="grid grid-cols-2 gap-2.5 pt-1 border-t border-slate-100">
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-0.5">B&W Single (₹)</label>
+                        <input 
+                          type="number" 
+                          readOnly
+                          value={activeTier.pricingBwSingle} 
+                          className="w-full p-2 text-xs border border-slate-200 rounded-lg font-bold bg-slate-50 text-slate-800 cursor-default focus:outline-none select-none" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-0.5">B&W Double (₹)</label>
+                        <input 
+                          type="number" 
+                          readOnly
+                          value={activeTier.pricingBwDouble} 
+                          className="w-full p-2 text-xs border border-slate-200 rounded-lg font-bold bg-slate-50 text-slate-800 cursor-default focus:outline-none select-none" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Color Single (₹)</label>
+                        <input 
+                          type="number" 
+                          readOnly
+                          value={activeTier.pricingColorSingle} 
+                          className="w-full p-2 text-xs border border-slate-200 rounded-lg font-bold bg-slate-50 text-slate-800 cursor-default focus:outline-none select-none" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-medium text-slate-500 mb-0.5">Color Double (₹)</label>
+                        <input 
+                          type="number" 
+                          readOnly
+                          value={activeTier.pricingColorDouble} 
+                          className="w-full p-2 text-xs border border-slate-200 rounded-lg font-bold bg-slate-50 text-slate-800 cursor-default focus:outline-none select-none" 
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              
+              {/* Single "Add Pricing" button */}
               <button
                 type="button"
-                onClick={() => setIsAddBulkOpen(true)}
-                className="w-full text-xs font-bold text-black bg-yellow-400 hover:bg-yellow-500 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs border-none"
+                onClick={handleOpenAddPricingModal}
+                className="w-full bg-yellow-400 hover:bg-yellow-500 text-black text-xs font-bold p-3 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-sm border-none mt-2"
               >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Set Bulk Prices</span>
+                <Plus className="w-4 h-4 text-black" />
+                <span>Add Pricing</span>
               </button>
+            </div>
+          )}
 
-              <button
+          {/* Collapsible Add-ons Dropdown Header (Placed below Pricing dropdown) */}
+          <button 
+            type="button"
+            onClick={() => setIsAddonsDropdownOpen(!isAddonsDropdownOpen)}
+            className="w-full flex items-center justify-between py-2 border-b border-slate-100 mb-3 text-xs font-bold text-slate-500 hover:text-slate-900 uppercase tracking-wider transition-colors cursor-pointer bg-transparent border-none text-left select-none mt-1"
+          >
+            <div className="flex items-center space-x-1.5">
+              <span>Add-ons</span>
+            </div>
+            {isAddonsDropdownOpen ? (
+              <ChevronUp className="w-4 h-4 text-slate-400" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-slate-400" />
+            )}
+          </button>
+
+          {isAddonsDropdownOpen && (
+            <div className="space-y-3.5 animate-in fade-in slide-in-from-top-1 duration-150 mb-6 bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200/80">
+              {addons.length === 0 ? (
+                <p className="text-xs text-slate-400 italic text-center py-2">No custom add-ons added yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {addons.map((addon) => (
+                    <div key={addon.id} className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-xl shadow-2xs">
+                      <span className="text-xs font-bold text-slate-900">{addon.name}</span>
+                      <span className="text-xs font-extrabold text-yellow-600">₹{addon.price.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <button 
                 type="button"
-                onClick={() => setIsViewBulkOpen(true)}
-                className="w-full text-xs font-bold text-slate-700 bg-white hover:bg-slate-50 border border-slate-200 py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                onClick={() => setIsEditingAddons(true)}
+                className="w-full text-xs font-bold text-slate-800 bg-white hover:bg-slate-50 border border-slate-200 py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
               >
-                <Layers className="w-3.5 h-3.5 text-slate-500" />
-                <span>View & Delete Bulk Prices ({bulkPrices.length})</span>
+                <span>Manage Add-ons Menu</span>
               </button>
             </div>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Store UPI ID (For Payments)</label>
-              <input 
-                type="text" 
-                value={upiId}
-                onChange={(e) => setUpiId(e.target.value)}
-                placeholder="e.g. yourname@upi"
-                className="w-full p-2.5 text-sm border border-slate-200 rounded-xl focus:border-yellow-400 focus:ring-1 focus:ring-yellow-400 focus:outline-none transition-colors text-slate-900 bg-slate-50 focus:bg-white" 
-              />
-            </div>
-            
-            <button 
-              onClick={handleSavePricing}
-              disabled={!hasChanges || saving}
-              className="w-full bg-yellow-400 hover:bg-yellow-500 text-black text-sm font-bold p-3 rounded-xl mt-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer shadow-sm border-none"
-            >
-              {saving ? 'Saving...' : 'Save Settings'}
-            </button>
-          </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-slate-200 bg-white">
@@ -1031,188 +1253,87 @@ export default function DashboardPage() {
               <p className="text-slate-500 font-medium">New print orders will appear here instantly when<br/>customers upload them.</p>
             </div>
           ) : (
-            orders.map((order) => (
-              <div key={order.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
-                
-                <div className="flex items-center space-x-5">
-                  <div className="bg-yellow-50 p-3 rounded-xl border border-yellow-100">
-                    <FileText className="w-8 h-8 text-yellow-500" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-slate-900 truncate max-w-[300px]" title={formatFilename(order.file_path)}>
-                      {formatFilename(order.file_path)}
-                    </h3>
-                    <div className="flex items-center space-x-3 mt-1 text-sm text-slate-500">
-                      <span className="font-semibold text-slate-800">{order.customer_name || 'Anonymous'}</span>
-                      <span className="text-xs">{order.customer_phone || ''}</span>
-                    </div>
-                    <div className="flex items-center space-x-3 mt-2 text-sm text-slate-500">
-                      <span className="bg-slate-100 px-2 py-0.5 rounded font-semibold text-slate-700">Qty: {order.quantity}</span>
-                      <span className={`px-2 py-0.5 rounded font-semibold uppercase text-xs ${order.color_mode.includes('color') ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-800'}`}>
-                        {order.color_mode.replace('_', ' ')}
+            orders.map((order, index) => {
+              // Parse clean customer name & extracted page selection details
+              let cleanCustomerName = 'Anonymous';
+              let extractedPagesTag: string | null = null;
+
+              if (order.customer_name) {
+                const bracketIdx = order.customer_name.indexOf('[');
+                cleanCustomerName = bracketIdx !== -1 
+                  ? order.customer_name.substring(0, bracketIdx).trim() 
+                  : order.customer_name.trim();
+
+                if (bracketIdx !== -1) {
+                  const detailsStr = order.customer_name.substring(bracketIdx);
+                  const match = detailsStr.match(/\[.*?-\s*([^\]]+)\]/);
+                  if (match && match[1]) {
+                    extractedPagesTag = match[1].replace(/\s*\(\d+\s*Total\)/i, '').trim();
+                  }
+                }
+              }
+
+              return (
+                <div key={order.id} className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 hover:shadow-md transition-shadow">
+                  
+                  <div className="flex items-center space-x-3.5 md:space-x-4 min-w-0 flex-1">
+                    {/* Queue Position Number in White Circle + Customer Name (Simple Text Layout) */}
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <span className="w-7 h-7 rounded-full bg-white border border-slate-300 text-slate-900 font-extrabold text-xs md:text-sm flex items-center justify-center shadow-2xs">
+                        {index + 1}
                       </span>
-                      <span className="font-bold text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded border border-yellow-100/50">₹{order.total_cost || 0}</span>
-                      <span>•</span>
-                      <span>Arrived {new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                      <span className="font-extrabold text-base md:text-lg text-slate-950 tracking-tight" title={cleanCustomerName}>
+                        {cleanCustomerName}
+                      </span>
+                      <div className="h-5 w-px bg-slate-200 ml-1 select-none" />
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-bold text-base md:text-lg text-slate-900 truncate" title={formatFilename(order.file_path)}>
+                        {formatFilename(order.file_path)}
+                      </h3>
+
+                      <div className="flex items-center space-x-2 md:space-x-2.5 mt-1.5 text-xs md:text-sm text-slate-500 flex-wrap gap-y-1">
+                        {order.customer_phone && (
+                          <span className="font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-xs">
+                            📞 {order.customer_phone}
+                          </span>
+                        )}
+                        <span className="bg-slate-100 px-2 py-0.5 rounded font-semibold text-slate-700">
+                          Copies: {order.quantity}
+                        </span>
+                        {extractedPagesTag && (
+                          <span className="bg-slate-100 px-2 py-0.5 rounded font-semibold text-slate-700">
+                            Pages: {extractedPagesTag}
+                          </span>
+                        )}
+                        <span className={`px-2 py-0.5 rounded font-semibold uppercase text-xs ${order.color_mode.includes('color') ? 'bg-purple-100 text-purple-700' : 'bg-slate-200 text-slate-800'}`}>
+                          {order.color_mode.replace('_', ' ')}
+                        </span>
+                        <span className="font-bold text-yellow-600 bg-yellow-50 px-2 py-0.5 rounded border border-yellow-100/50">₹{order.total_cost || 0}</span>
+                        <span>•</span>
+                        <span>Arrived {new Date(order.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="flex items-center space-x-4">
-                  <button 
-                    onClick={() => handlePrint(order)}
-                    className="flex items-center space-x-2 bg-yellow-400 text-black px-6 py-3 rounded-xl font-bold hover:bg-yellow-500 transition-colors shadow-sm cursor-pointer border-none"
-                  >
-                    <Printer className="w-5 h-5" />
-                    <span>Print Now</span>
-                  </button>
-                </div>
+                  <div className="flex items-center justify-end space-x-4 shrink-0">
+                    <button 
+                      onClick={() => handlePrint(order)}
+                      className="flex items-center space-x-2 bg-yellow-400 text-black px-6 py-3 rounded-xl font-bold hover:bg-yellow-500 transition-colors shadow-sm cursor-pointer border-none text-sm md:text-base"
+                    >
+                      <Printer className="w-5 h-5" />
+                      <span>Print Now</span>
+                    </button>
+                  </div>
 
-              </div>
-            ))
+                </div>
+              );
+            })
           )}
         </div>
       </main>
 
-      {/* Modal 1: Create Bulk Price Rule */}
-      {isAddBulkOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl w-full max-w-sm text-left space-y-5 animate-scale-in relative">
-            <button 
-              onClick={() => setIsAddBulkOpen(false)}
-              className="absolute right-6 top-6 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition border-none bg-transparent cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center space-x-3 pb-3 border-b border-slate-100">
-              <div className="bg-yellow-100 p-3 rounded-2xl text-yellow-700">
-                <Tag className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-950 uppercase tracking-tight">Set Bulk Pricing Tier</h3>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Custom rates for large page counts</p>
-              </div>
-            </div>
-
-            <form onSubmit={handleAddBulkRule} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Minimum Page Count Threshold
-                </label>
-                <input
-                  type="number"
-                  min="2"
-                  placeholder="e.g. 50"
-                  value={bulkMinPages}
-                  onChange={(e) => setBulkMinPages(e.target.value)}
-                  className="w-full p-3 border border-slate-200 rounded-xl text-slate-900 text-sm font-semibold bg-slate-50 focus:bg-white"
-                  required
-                />
-                <span className="text-[10px] text-slate-400 mt-1 block">Applies when total printed pages (Pages × Copies) reaches {bulkMinPages || 'X'}+ pages</span>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Print Mode Applicability
-                </label>
-                <select
-                  value={bulkPrintType}
-                  onChange={(e) => setBulkPrintType(e.target.value)}
-                  className="w-full p-3 border border-slate-200 rounded-xl text-slate-900 text-sm font-semibold bg-slate-50 focus:bg-white cursor-pointer"
-                >
-                  <option value="all">All Print Types</option>
-                  <option value="bw">B&W (Single)</option>
-                  <option value="bw_double">B&W (Double)</option>
-                  <option value="color">Color (Single)</option>
-                  <option value="color_double">Color (Double)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  Bulk Rate (₹ per page)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0.1"
-                  placeholder="e.g. 1.5"
-                  value={bulkPricePerPage}
-                  onChange={(e) => setBulkPricePerPage(e.target.value)}
-                  className="w-full p-3 border border-slate-200 rounded-xl text-slate-900 text-sm font-semibold bg-slate-50 focus:bg-white"
-                  required
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full bg-yellow-400 text-black font-bold p-3.5 rounded-xl text-xs hover:bg-yellow-500 transition-all border-none cursor-pointer shadow-sm mt-2"
-              >
-                Save Bulk Price Tier
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal 2: View & Delete Bulk Prices */}
-      {isViewBulkOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl w-full max-w-md text-left space-y-5 animate-scale-in relative">
-            <button 
-              onClick={() => setIsViewBulkOpen(false)}
-              className="absolute right-6 top-6 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition border-none bg-transparent cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center space-x-3 pb-3 border-b border-slate-100">
-              <div className="bg-blue-100 p-3 rounded-2xl text-blue-700">
-                <Layers className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-xl font-black text-slate-950 uppercase tracking-tight">Active Bulk Prices</h3>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Configured bulk rates for your shop</p>
-              </div>
-            </div>
-
-            <div className="max-h-[50vh] overflow-y-auto space-y-3 pr-1">
-              {bulkPrices.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-10 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50 p-4">
-                  <Tag className="w-8 h-8 text-slate-300 mb-2" />
-                  <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">No Bulk Prices Set</p>
-                  <p className="text-[11px] text-slate-400 font-medium mt-1">Click "Set Bulk Prices" to offer discounts on large print orders.</p>
-                </div>
-              ) : (
-                bulkPrices.map(rule => (
-                  <div key={rule.id} className="p-4 border border-slate-200 rounded-2xl bg-slate-50 flex items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center space-x-2">
-                        <span className="text-xs font-black text-slate-900 bg-yellow-100 px-2 py-0.5 rounded-md border border-yellow-200">
-                          {rule.minPages}+ Pages
-                        </span>
-                        <span className="text-xs font-bold text-yellow-700">₹{rule.pricePerPage} / page</span>
-                      </div>
-                      <p className="text-xs text-slate-500 font-semibold">
-                        Applies to: <strong className="text-slate-800 uppercase text-[11px]">{rule.printType.replace('_', ' ')}</strong>
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => handleDeleteBulkRule(rule.id)}
-                      className="p-2.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl transition cursor-pointer border border-red-100 bg-white"
-                      title="Delete Bulk Price"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
       {isRecentsModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl w-full max-w-lg text-left space-y-5 animate-scale-in relative">
@@ -1482,6 +1603,126 @@ export default function DashboardPage() {
                 Close / Done
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Add Page Range & Pricing */}
+      {isAddPricingModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl w-full max-w-sm text-left space-y-5 animate-scale-in relative">
+            <button 
+              onClick={() => setIsAddPricingModalOpen(false)}
+              className="absolute right-6 top-6 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition border-none bg-transparent cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center space-x-3 pb-3 border-b border-slate-100">
+              <div className="bg-yellow-100 p-3 rounded-2xl text-yellow-700">
+                <Tag className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-950 uppercase tracking-tight">
+                  {editingTierId ? 'Edit Page Range & Pricing' : 'Add Page Range & Pricing'}
+                </h3>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Set range & rates for printing</p>
+              </div>
+            </div>
+
+            {modalError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded-2xl font-bold flex items-start gap-2.5 animate-in fade-in">
+                <Shield className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                <span className="leading-tight">{modalError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveNewPricingModal} className="space-y-4">
+              {/* Page Range From - To */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">From Page</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newFromPage}
+                    onChange={(e) => setNewFromPage(e.target.value)}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-slate-900 text-xs font-semibold bg-slate-50 focus:bg-white"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">To Page (Blank = ∞)</label>
+                  <input
+                    type="number"
+                    min={parseInt(newFromPage) || 1}
+                    placeholder="Unlimited"
+                    value={newToPage}
+                    onChange={(e) => setNewToPage(e.target.value)}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-slate-900 text-xs font-semibold bg-slate-50 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* 4 Pricing Inputs */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">B&W Single (₹)</label>
+                  <input 
+                    type="number" 
+                    step="0.5" 
+                    min="0" 
+                    value={newPricingBwSingle} 
+                    onChange={(e) => setNewPricingBwSingle(e.target.value)} 
+                    className="w-full p-2.5 text-xs border border-slate-200 rounded-xl font-semibold bg-slate-50 focus:bg-white text-slate-900" 
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">B&W Double (₹)</label>
+                  <input 
+                    type="number" 
+                    step="0.5" 
+                    min="0" 
+                    value={newPricingBwDouble} 
+                    onChange={(e) => setNewPricingBwDouble(e.target.value)} 
+                    className="w-full p-2.5 text-xs border border-slate-200 rounded-xl font-semibold bg-slate-50 focus:bg-white text-slate-900" 
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Color Single (₹)</label>
+                  <input 
+                    type="number" 
+                    step="0.5" 
+                    min="0" 
+                    value={newPricingColorSingle} 
+                    onChange={(e) => setNewPricingColorSingle(e.target.value)} 
+                    className="w-full p-2.5 text-xs border border-slate-200 rounded-xl font-semibold bg-slate-50 focus:bg-white text-slate-900" 
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">Color Double (₹)</label>
+                  <input 
+                    type="number" 
+                    step="0.5" 
+                    min="0" 
+                    value={newPricingColorDouble} 
+                    onChange={(e) => setNewPricingColorDouble(e.target.value)} 
+                    className="w-full p-2.5 text-xs border border-slate-200 rounded-xl font-semibold bg-slate-50 focus:bg-white text-slate-900" 
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-bold p-3.5 rounded-xl text-xs transition-all border-none cursor-pointer shadow-sm mt-2"
+              >
+                {editingTierId ? 'Save Changes' : 'Save & Add Range Pricing'}
+              </button>
+            </form>
           </div>
         </div>
       )}
