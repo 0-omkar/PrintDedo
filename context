@@ -124,6 +124,12 @@ This file serves as the handover and history context for developers or other AI 
 - **File(s) Modified/Created:**
   - [NEW] [security_audit.md](file:///Users/omkar/Desktop/macbook%20air%20back-up/Projects/zerox/security_audit.md)
 
+### Entry 17: 2026-07-18
+- **Prompt:** Connect local app to the new Supabase project (`PrintDedo`).
+- **Action/Edits:** Updated `.env.local` with the new Supabase project URL (`https://iyhmoiqbkxhpznqalnal.supabase.co`) and anon public key.
+- **File(s) Modified/Created:**
+  - [MODIFY] [.env.local](file:///Users/omkar/Desktop/macbook%20air%20back-up/Projects/zerox/.env.local)
+
 ---
 
 ## 🛠️ Project Overview
