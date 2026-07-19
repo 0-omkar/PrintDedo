@@ -3,16 +3,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import { Mail, Phone, User, CreditCard, Shield, Loader2, ArrowLeft } from 'lucide-react';
-
-const DEFAULT_PLANS = [
-  { id: 'free_trial', name: 'Free Trial', duration_months: 1, price: 0, description: '1 Month trial for new shops (Free)' },
-  { id: 'quarterly', name: 'Quarterly', duration_months: 3, price: 1500, description: '3 Months standard subscription (500₹/mo)' },
-  { id: 'half_yearly', name: 'Half Yearly', duration_months: 6, price: 2700, description: '6 Months cost-effective subscription (450₹/mo)' },
-  { id: 'yearly', name: 'Yearly', duration_months: 12, price: 4800, description: '12 Months premium subscription (400₹/mo)' }
-];
+import { BackgroundDecorations } from '@/components/BackgroundDecorations';
 
 export default function RenewPage() {
-  const [plans, setPlans] = useState<any[]>(DEFAULT_PLANS);
+  const [plans, setPlans] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,14 +17,10 @@ export default function RenewPage() {
           .select('*')
           .order('price', { ascending: true });
         if (error) throw error;
-        if (data && data.length > 0) {
-          setPlans(data);
-        } else {
-          setPlans(DEFAULT_PLANS);
-        }
+        setPlans(data || []);
       } catch (e) {
         console.error('Failed to load plans:', e);
-        setPlans(DEFAULT_PLANS);
+        setPlans([]);
       } finally {
         setLoading(false);
       }
@@ -40,9 +30,7 @@ export default function RenewPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col items-center py-10 px-4 relative overflow-hidden">
-      {/* Background decorations */}
-      <div className="absolute -top-24 -right-24 h-80 w-80 rounded-full bg-yellow-100/50 blur-3xl opacity-60 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-yellow-50/50 blur-3xl opacity-60 pointer-events-none" />
+      <BackgroundDecorations />
 
       <main className="relative z-10 w-full max-w-4xl flex flex-col items-center">
         {/* Back Link */}
@@ -61,7 +49,7 @@ export default function RenewPage() {
           <div className="bg-yellow-400 p-3 rounded-2xl shadow-sm mb-4 inline-flex items-center justify-center">
             <Shield className="w-8 h-8 text-black" />
           </div>
-          <h1 className="text-3xl font-black text-slate-950 uppercase tracking-tight">XeroxFlow Subscription</h1>
+          <h1 className="text-3xl font-black text-slate-950 uppercase tracking-tight">PrintDedo Subscription</h1>
           <p className="text-xs text-slate-400 font-bold tracking-widest uppercase mt-0.5">Activate or Renew Your Print Shop Portal</p>
         </div>
 

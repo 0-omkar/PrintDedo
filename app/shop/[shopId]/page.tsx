@@ -1,644 +1,50 @@
 'use client';
-import { useState, use, useEffect } from 'react';
-import { UploadCloud, FileText, CheckCircle, Star, X, Layers, Plus, Trash2 } from 'lucide-react';
-import { supabase } from '@/lib/supabaseClient';
+import { use } from 'react';
 import Link from 'next/link';
-import { PDFDocument } from 'pdf-lib';
-
-const XeroxLogoSVG = () => (
-  <svg viewBox="0 0 100 100" className="w-12 h-12 text-slate-800" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-    {/* Copier Main Body */}
-    <rect x="25" y="40" width="50" height="40" rx="4" fill="none" />
-    <line x1="25" y1="52" x2="75" y2="52" />
-    {/* Control Panel */}
-    <rect x="30" y="44" width="12" height="5" rx="1" fill="currentColor" />
-    {/* Paper Trays / Output side */}
-    <path d="M75 45h8a2 2 0 0 1 2 2v20a2 2 0 0 1-2 2h-8" />
-    <path d="M25 45h-8a2 2 0 0 0-2 2v20a2 2 0 0 0 2 2h-8" />
-    {/* Top Scanner Lid */}
-    <path d="M22 30h56v10H22z" fill="none" />
-    <line x1="25" y1="35" x2="75" y2="35" />
-    {/* Top Document Feeder */}
-    <path d="M35 18h30l5 12H30z" fill="none" />
-    <path d="M60 18h10a2 2 0 0 1 2 2v4" />
-    {/* Lower Drawers / Paper Cassette */}
-    <line x1="35" y1="65" x2="65" y2="65" />
-    <line x1="35" y1="73" x2="65" y2="73" />
-    <circle cx="50" cy="65" r="1.5" fill="currentColor" />
-    <circle cx="50" cy="73" r="1.5" fill="currentColor" />
-  </svg>
-);
-
-interface AttachedDoc {
-  id: string;
-  file: File;
-  pdfPageCount: number | null;
-  pageSelectionMode: 'all' | 'range' | 'custom';
-  fromPage: number;
-  toPage: number;
-  customPagesInput: string;
-  selectedPagesCount: number;
-  quantity: number;
-  printType: string;
-  selectedAddons: string[];
-  itemCost: number;
-}
+import { FileText, Plus, Trash2 } from 'lucide-react';
+import { XeroxLogoSVG } from '@/components/XeroxLogoSVG';
+import { BackgroundDecorations } from '@/components/BackgroundDecorations';
+import { SuccessScreen } from './components/SuccessScreen';
+import { ExpiredSubscriptionScreen } from './components/ExpiredSubscriptionScreen';
+import { OrderSummaryModal } from './components/OrderSummaryModal';
+import { useShopDropBoxViewModel } from './viewmodels/useShopDropBoxViewModel';
 
 export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: string }> }) {
-  const [file, setFile] = useState<File | null>(null);
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [quantity, setQuantity] = useState(1);
-  const [printType, setPrintType] = useState('bw');
-  const [shopInfo, setShopInfo] = useState<any>(null);
-  const [totalCost, setTotalCost] = useState(0);
-  const [logo, setLogo] = useState('');
-
-  // Multi-document list state
-  const [attachedDocs, setAttachedDocs] = useState<AttachedDoc[]>([]);
-  const [submittedDocCount, setSubmittedDocCount] = useState(1);
-
-  // PDF Page Counting & Page Selection States
-  const [pdfPageCount, setPdfPageCount] = useState<number | null>(null);
-  const [pageSelectionMode, setPageSelectionMode] = useState<'all' | 'range' | 'custom'>('all');
-  const [fromPage, setFromPage] = useState<number>(1);
-  const [toPage, setToPage] = useState<number>(1);
-  const [customPagesInput, setCustomPagesInput] = useState<string>('');
-
-  // Custom addons state
-  interface Addon {
-    id: string;
-    name: string;
-    price: number;
-  }
-  const [addons, setAddons] = useState<Addon[]>([]);
-  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
-
-  // Page Range Price Tiers State
-  interface PriceTier {
-    id: string;
-    fromPage: number;
-    toPage: number | null;
-    pricingBwSingle: number;
-    pricingBwDouble: number;
-    pricingColorSingle: number;
-    pricingColorDouble: number;
-  }
-  const [priceTiers, setPriceTiers] = useState<PriceTier[]>([]);
-  const [appliedBulkRate, setAppliedBulkRate] = useState<number | null>(null);
-
-  // Review states
-  const [isReviewOpen, setIsReviewOpen] = useState(false);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState('');
-  const [reviewSubmitted, setReviewSubmitted] = useState(false);
-
-  const [uploading, setUploading] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
   const resolvedParams = use(params);
+  const vm = useShopDropBoxViewModel(resolvedParams.shopId);
 
-  const isSubscriptionExpired = () => {
-    if (!shopInfo) return false;
-    if (!shopInfo.subscription_expires_at) return true;
-    const expires = new Date(shopInfo.subscription_expires_at).getTime();
-    return expires < Date.now();
-  };
-
-  useEffect(() => {
-    // Log the user in anonymously if they aren't already, so they bypass upload RLS
-    const initAnonAuth = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (error || !session) {
-        if (error) {
-          await supabase.auth.signOut().catch(() => {});
-        }
-        await supabase.auth.signInAnonymously().catch(() => {});
-      }
-    };
-    initAnonAuth();
-
-    const fetchShopInfo = async () => {
-      const { data } = await supabase.from('shops').select('*').eq('id', resolvedParams.shopId).single();
-      if (data) setShopInfo(data);
-    };
-    fetchShopInfo();
-
-    // Load custom addons and logo from local storage if available
-    if (typeof window !== 'undefined') {
-      const storedLogo = localStorage.getItem('xeroxflow_logo');
-      if (storedLogo) setLogo(storedLogo);
-
-      const storedTiers = localStorage.getItem(`xeroxflow_price_tiers_${resolvedParams.shopId}`);
-      if (storedTiers) {
-        try {
-          setPriceTiers(JSON.parse(storedTiers));
-        } catch (e) {}
-      }
-
-      const stored = localStorage.getItem(`xeroxflow_addons_${resolvedParams.shopId}`);
-      if (stored) {
-        try {
-          setAddons(JSON.parse(stored));
-        } catch (e) {
-          console.error('Failed to parse addons:', e);
-        }
-      } else {
-        const defaults = [
-          { id: 'lamination', name: 'Lamination', price: 15 },
-          { id: 'photoprint', name: 'Photo Paper Print', price: 20 },
-          { id: 'spiral', name: 'Spiral Binding', price: 40 }
-        ];
-        setAddons(defaults);
-      }
-
-    }
-  }, [resolvedParams.shopId]);
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0] || null;
-    setFile(selectedFile);
-    setPdfPageCount(null);
-
-    if (selectedFile) {
-      try {
-        const arrayBuffer = await selectedFile.arrayBuffer();
-        const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-        const count = pdfDoc.getPageCount();
-        setPdfPageCount(count);
-        setFromPage(1);
-        setToPage(count);
-      } catch (err) {
-        console.error('Could not parse PDF page count:', err);
-      }
-    }
-  };
-
-  const calculateSelectedPagesCount = (): number => {
-    if (pageSelectionMode === 'all') {
-      return Math.max(1, pdfPageCount || 1);
-    }
-
-    if (pageSelectionMode === 'range') {
-      const f = Math.max(1, Math.min(fromPage || 1, pdfPageCount || 9999));
-      const t = Math.max(f, Math.min(toPage || 1, pdfPageCount || 9999));
-      return Math.max(1, t - f + 1);
-    }
-
-    if (pageSelectionMode === 'custom') {
-      if (!customPagesInput.trim()) return 1;
-      const pagesSet = new Set<number>();
-      const parts = customPagesInput.split(',');
-      for (const part of parts) {
-        const trimmed = part.trim();
-        if (!trimmed) continue;
-        if (trimmed.includes('-')) {
-          const [startStr, endStr] = trimmed.split('-');
-          const start = parseInt(startStr, 10);
-          const end = parseInt(endStr, 10);
-          if (!isNaN(start) && !isNaN(end)) {
-            const s = Math.max(1, Math.min(start, end));
-            const e = Math.max(s, Math.max(start, end));
-            for (let i = s; i <= e; i++) {
-              if (pdfPageCount ? i <= pdfPageCount : true) {
-                pagesSet.add(i);
-              }
-            }
-          }
-        } else {
-          const p = parseInt(trimmed, 10);
-          if (!isNaN(p) && p > 0 && (pdfPageCount ? p <= pdfPageCount : true)) {
-            pagesSet.add(p);
-          }
-        }
-      }
-      return pagesSet.size > 0 ? pagesSet.size : 1;
-    }
-
-    return 1;
-  };
-
-  const selectedPagesCount = calculateSelectedPagesCount();
-
-  // Helper function to calculate item cost
-  const calculateDocCost = (
-    pType: string,
-    pagesCount: number,
-    qty: number,
-    selAddons: string[]
-  ): { cost: number; bulkRate: number | null } => {
-    if (!shopInfo) return { cost: 0, bulkRate: null };
-    let basePrice = 0;
-    if (pType === 'bw') basePrice = shopInfo.pricing_bw || 0;
-    else if (pType === 'bw_double') basePrice = shopInfo.pricing_bw_double || 0;
-    else if (pType === 'color') basePrice = shopInfo.pricing_color || 0;
-    else if (pType === 'color_double') basePrice = shopInfo.pricing_color_double || 0;
-
-    const totalPrintedPages = pagesCount * Math.max(1, qty);
-    let finalPrice = basePrice;
-    let activeBulk: number | null = null;
-
-    if (priceTiers.length > 0) {
-      // Find tier matching total printed pages range
-      const matchingTier = priceTiers.find(t => {
-        const minMatch = totalPrintedPages >= t.fromPage;
-        const maxMatch = t.toPage === null || t.toPage === 0 || totalPrintedPages <= t.toPage;
-        return minMatch && maxMatch;
-      });
-
-      if (matchingTier) {
-        let tierRate = basePrice;
-        if (pType === 'bw') tierRate = matchingTier.pricingBwSingle;
-        else if (pType === 'bw_double') tierRate = matchingTier.pricingBwDouble;
-        else if (pType === 'color') tierRate = matchingTier.pricingColorSingle;
-        else if (pType === 'color_double') tierRate = matchingTier.pricingColorDouble;
-
-        finalPrice = tierRate;
-        if (tierRate < basePrice) {
-          activeBulk = tierRate;
-        }
-      }
-    }
-
-    const addonsPrice = selAddons.reduce((sum, addonId) => {
-      const addon = addons.find(a => a.id === addonId);
-      return sum + (addon ? addon.price : 0);
-    }, 0);
-
-    const cost = (finalPrice * pagesCount * Math.max(1, qty)) + addonsPrice;
-    return { cost, bulkRate: activeBulk };
-  };
-
-  const currentDocCalc = calculateDocCost(printType, selectedPagesCount, quantity, selectedAddons);
-  const currentDocCost = file ? currentDocCalc.cost : 0;
-  const attachedTotalCost = attachedDocs.reduce((sum, d) => sum + d.itemCost, 0);
-  const grandTotalCost = attachedTotalCost + currentDocCost;
-
-  useEffect(() => {
-    setAppliedBulkRate(currentDocCalc.bulkRate);
-    setTotalCost(grandTotalCost);
-  }, [grandTotalCost, currentDocCalc.bulkRate]);
-
-  // Handler to attach current configured document to the batch list
-  const handleAttachAnother = () => {
-    if (!file) return;
-    const newDoc: AttachedDoc = {
-      id: Date.now().toString() + '_' + Math.random().toString(36).substring(2, 7),
-      file,
-      pdfPageCount,
-      pageSelectionMode,
-      fromPage,
-      toPage,
-      customPagesInput,
-      selectedPagesCount,
-      quantity,
-      printType,
-      selectedAddons: [...selectedAddons],
-      itemCost: currentDocCost
-    };
-    setAttachedDocs(prev => [...prev, newDoc]);
-    // Reset file picker & doc options for next attachment
-    setFile(null);
-    setPdfPageCount(null);
-    setPageSelectionMode('all');
-    setFromPage(1);
-    setToPage(1);
-    setCustomPagesInput('');
-    setQuantity(1);
-    setPrintType('bw');
-    setSelectedAddons([]);
-  };
-
-  const handleRemoveAttachedDoc = (id: string) => {
-    setAttachedDocs(prev => prev.filter(d => d.id !== id));
-  };
-
-  const handleOpenSummaryModal = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const docsToUpload: AttachedDoc[] = [...attachedDocs];
-    if (file) {
-      docsToUpload.push({
-        id: 'current_active_doc',
-        file,
-        pdfPageCount,
-        pageSelectionMode,
-        fromPage,
-        toPage,
-        customPagesInput,
-        selectedPagesCount,
-        quantity,
-        printType,
-        selectedAddons: [...selectedAddons],
-        itemCost: currentDocCost
-      });
-    }
-
-    if (docsToUpload.length === 0) {
-      setErrorMsg('Please select or attach at least one PDF document.');
-      return;
-    }
-
-    if (!name.trim()) {
-      setErrorMsg('Please enter your name.');
-      return;
-    }
-
-    setErrorMsg('');
-    setIsSummaryModalOpen(true);
-  };
-
-  const executeFinalUpload = async () => {
-    setIsSummaryModalOpen(false);
-    setUploading(true);
-    setErrorMsg('');
-
-    const docsToUpload: AttachedDoc[] = [...attachedDocs];
-    if (file) {
-      docsToUpload.push({
-        id: 'current_active_doc',
-        file,
-        pdfPageCount,
-        pageSelectionMode,
-        fromPage,
-        toPage,
-        customPagesInput,
-        selectedPagesCount,
-        quantity,
-        printType,
-        selectedAddons: [...selectedAddons],
-        itemCost: currentDocCost
-      });
-    }
-
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-
-      for (const doc of docsToUpload) {
-        // 1. Clean the filename to store it safely in the path without a separate column
-        const safeOriginalName = doc.file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const fileName = `${Date.now()}_${safeOriginalName}`;
-        const filePath = `${resolvedParams.shopId}/${fileName}`;
-
-        const { error: uploadError } = await supabase.storage
-          .from('xerox-files')
-          .upload(filePath, doc.file);
-
-        if (uploadError) throw uploadError;
-
-        // Format customer name to include page selection details & add-ons
-        let pageDetailsStr = 'All Pages';
-        if (doc.pageSelectionMode === 'range') {
-          pageDetailsStr = `Pages ${doc.fromPage}-${doc.toPage}`;
-        } else if (doc.pageSelectionMode === 'custom') {
-          pageDetailsStr = `Pages ${doc.customPagesInput || 'Custom'}`;
-        } else if (doc.pdfPageCount) {
-          pageDetailsStr = `All ${doc.pdfPageCount} Pgs (${doc.selectedPagesCount} Total)`;
-        }
-
-        let finalCustomerName = `${name} [${doc.file.name} - ${pageDetailsStr}]`;
-        if (doc.selectedAddons.length > 0) {
-          const addonNames = doc.selectedAddons
-            .map(id => addons.find(a => a.id === id)?.name)
-            .filter(Boolean);
-          finalCustomerName += ` [+ ${addonNames.join(', ')}]`;
-        }
-
-        // Add to orders table
-        const { error: dbError } = await supabase
-          .from('orders')
-          .insert({
-            shop_id: resolvedParams.shopId,
-            customer_id: user?.id,
-            file_path: filePath,
-            quantity: doc.quantity,
-            color_mode: doc.printType,
-            status: 'pending',
-            customer_name: finalCustomerName,
-            customer_phone: phone || '',
-            total_cost: doc.itemCost
-          });
-
-        if (dbError) throw dbError;
-
-        // Log the upload file size and timestamp to localStorage for admin metrics auditing
-        if (typeof window !== 'undefined') {
-          const uploadLog = {
-            shopId: resolvedParams.shopId,
-            size: doc.file.size,
-            timestamp: Date.now()
-          };
-          const storedLogs = localStorage.getItem('xeroxflow_storage_logs');
-          let logs = [];
-          if (storedLogs) {
-            try {
-              logs = JSON.parse(storedLogs);
-            } catch (e) {}
-          }
-          logs.push(uploadLog);
-          const fortyEightHoursAgo = Date.now() - 48 * 60 * 60 * 1000;
-          logs = logs.filter((log: any) => log.timestamp >= fortyEightHoursAgo);
-          localStorage.setItem('xeroxflow_storage_logs', JSON.stringify(logs));
-        }
-      }
-
-      setSubmittedDocCount(docsToUpload.length);
-      setIsSuccess(true);
-    } catch (err: any) {
-      setErrorMsg(err.message || 'An error occurred during upload.');
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleAddReview = () => {
-    const newReview = {
-      rating: reviewRating,
-      comment: reviewComment,
-      name: name || 'Anonymous',
-      timestamp: Date.now()
-    };
-    
-    // Save to reviews list in localStorage
-    const reviewsKey = `xeroxflow_reviews_list_${resolvedParams.shopId}`;
-    let list = [];
-    const stored = localStorage.getItem(reviewsKey);
-    if (stored) {
-      try { list = JSON.parse(stored); } catch (e) {}
-    }
-    list.push(newReview);
-    localStorage.setItem(reviewsKey, JSON.stringify(list));
-    
-    // Re-calculate average rating and counts
-    const count = list.length;
-    const sum = list.reduce((s: number, r: any) => s + r.rating, 0);
-    const average = sum / count;
-    
-    // Store average and count so dashboard banner can read it
-    localStorage.setItem('xeroxflow_rating', average.toFixed(1));
-    localStorage.setItem('xeroxflow_reviews', count.toString());
-    
-    setReviewSubmitted(true);
-    setIsReviewOpen(false);
-  };
-
-  if (isSuccess) {
+  if (vm.isSuccess) {
     return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
-        {/* Background decorations */}
-        <div className="absolute -top-24 -right-24 h-80 w-80 rounded-full bg-yellow-100/50 blur-3xl opacity-60 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-yellow-50/50 blur-3xl opacity-60 pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col items-center justify-center w-full max-w-sm">
-          <CheckCircle className="w-16 h-16 text-yellow-500 mb-4" />
-          <h1 className="text-3xl font-extrabold text-slate-900 mb-2 text-center">Sent Successfully!</h1>
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 mb-6 w-full text-center">
-            <p className="text-slate-500 text-sm mb-2">Total Amount</p>
-            <p className="text-4xl font-black text-slate-900 mb-4">₹{grandTotalCost.toFixed(2)}</p>
-            <p className="text-slate-600 text-sm mb-2">
-              Please show your name (<strong>{name}</strong>) to the shop owner after you receive your {submittedDocCount > 1 ? `${submittedDocCount} print orders` : 'prints'} to collect.
-            </p>
-          </div>
-          <button 
-            onClick={() => { 
-              setIsSuccess(false); 
-              setFile(null); 
-              setAttachedDocs([]); 
-              setReviewSubmitted(false);
-              // Note: 'name' and 'phone' are kept intact so customer can attach another document under the same name!
-            }}
-            className="w-full bg-yellow-400 text-black px-6 py-3.5 rounded-xl font-bold hover:bg-yellow-500 transition cursor-pointer border-none shadow-sm flex items-center justify-center gap-2"
-          >
-            <Plus className="w-5 h-5" />
-            <span>Attach Another Document</span>
-          </button>
-
-          {!reviewSubmitted && (
-            <button 
-              onClick={() => {
-                setReviewRating(5);
-                setReviewComment('');
-                setIsReviewOpen(true);
-              }}
-              className="w-full mt-3 bg-white border border-slate-200 text-slate-700 px-6 py-3.5 rounded-xl font-bold hover:bg-slate-50 transition cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
-            >
-              <Star className="w-4 h-4 text-yellow-500 fill-yellow-500" />
-              <span>Write a Review</span>
-            </button>
-          )}
-
-          {reviewSubmitted && (
-            <div className="mt-4 bg-green-50 border border-green-200 text-green-700 rounded-xl p-3 text-xs font-bold text-center w-full">
-              Review submitted! Thank you.
-            </div>
-          )}
-        </div>
-
-        {/* Simple Review Modal */}
-        {isReviewOpen && (
-          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-3xl p-8 max-w-sm w-full border border-slate-200 shadow-xl relative animate-in fade-in zoom-in-95 duration-150 text-slate-900">
-              <button 
-                onClick={() => setIsReviewOpen(false)}
-                className="absolute right-6 top-6 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition border-none bg-transparent"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              
-              <h3 className="text-xl font-extrabold mb-1">Write a Review</h3>
-              <p className="text-xs text-slate-500 mb-6 font-medium">How was your printing experience?</p>
-              
-              <div className="space-y-5">
-                {/* Star rating selector */}
-                <div className="flex items-center justify-center space-x-2.5">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setReviewRating(star)}
-                      className="p-1 hover:scale-110 transition cursor-pointer border-none bg-transparent"
-                    >
-                      <Star 
-                        className={`w-9 h-9 ${star <= reviewRating ? 'text-yellow-400 fill-yellow-400' : 'text-slate-200'}`} 
-                      />
-                    </button>
-                  ))}
-                </div>
-
-                {/* Comment textarea */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    Comment (Optional)
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Describe your experience..."
-                    value={reviewComment}
-                    onChange={(e) => setReviewComment(e.target.value)}
-                    className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 focus:outline-none text-sm font-medium"
-                  />
-                </div>
-
-                <button 
-                  onClick={handleAddReview}
-                  className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-bold py-3.5 rounded-xl transition shadow-sm border-none cursor-pointer text-sm"
-                >
-                  Submit Review
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+      <SuccessScreen
+        shopName={vm.shopInfo?.store_name}
+        logo={vm.logo}
+        name={vm.name}
+        submittedDocCount={vm.submittedDocCount}
+        onAttachAnother={() => {
+          vm.setIsSuccess(false);
+          vm.setFile(null);
+          vm.setAttachedDocs([]);
+          vm.setReviewSubmitted(false);
+        }}
+        reviewSubmitted={vm.reviewSubmitted}
+        isReviewOpen={vm.isReviewOpen}
+        setIsReviewOpen={vm.setIsReviewOpen}
+        shopRating={vm.shopRating}
+        setShopRating={vm.setShopRating}
+        shopComment={vm.shopComment}
+        setShopComment={vm.setShopComment}
+        platformRating={vm.platformRating}
+        setPlatformRating={vm.setPlatformRating}
+        platformComment={vm.platformComment}
+        setPlatformComment={vm.setPlatformComment}
+        onAddReview={vm.handleAddReview}
+      />
     );
   }
 
-  if (isSubscriptionExpired()) {
-    return (
-      <div className="min-h-screen bg-white font-sans text-slate-900 flex flex-col items-center justify-center py-10 px-4 relative overflow-hidden">
-        <div className="absolute -top-24 -right-24 h-80 w-80 rounded-full bg-yellow-100/50 blur-3xl opacity-60 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-yellow-50/50 blur-3xl opacity-60 pointer-events-none" />
-
-        <main className="relative z-10 w-full max-w-md flex flex-col items-center text-center">
-          <div className="w-24 h-24 rounded-full border-4 border-yellow-400 bg-white flex items-center justify-center overflow-hidden shadow-sm shrink-0 mb-6 text-yellow-500 animate-pulse">
-            <svg viewBox="0 0 24 24" className="w-10 h-10" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-          </div>
-
-          <h1 className="text-3xl font-black tracking-tight text-center text-slate-950 uppercase w-full">
-            {shopInfo?.store_name}
-          </h1>
-          
-          <p className="text-slate-500 text-center text-xs font-semibold tracking-wide uppercase mt-2 w-full mb-8">
-            XEROX • PRINT • SCAN • LAMINATION
-          </p>
-
-          <div className="bg-yellow-50 border border-yellow-100 rounded-3xl p-6.5 w-full shadow-sm text-center space-y-4">
-            <h2 className="text-lg font-black text-yellow-800 uppercase tracking-tight">Service Suspended</h2>
-            <p className="text-xs text-yellow-750 font-semibold leading-relaxed">
-              This shop's print dropbox portal is temporarily disabled due to an expired subscription.
-            </p>
-            <Link 
-              href="/renew"
-              className="bg-yellow-400 hover:bg-yellow-500 text-black font-bold py-3.5 px-6 rounded-xl transition shadow-sm border-none cursor-pointer text-sm block w-full text-center"
-            >
-              Contact Admin to Renew
-            </Link>
-          </div>
-
-          <div className="mt-8">
-            <Link href="/" className="text-sm font-bold text-slate-400 hover:text-slate-650 transition-colors">← Back to Home</Link>
-          </div>
-        </main>
-      </div>
-    );
+  if (vm.isSubscriptionExpired()) {
+    return <ExpiredSubscriptionScreen storeName={vm.shopInfo?.store_name} />;
   }
-
-  const totalBatchDocsCount = attachedDocs.length + (file ? 1 : 0);
 
   return (
     <div className="min-h-screen bg-white font-sans text-slate-900 flex flex-col items-center py-10 px-4 relative overflow-hidden">
@@ -648,46 +54,46 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
 
       <main className="relative z-10 w-full max-w-md flex flex-col items-center mt-10">
         <div className="w-24 h-24 rounded-full border-4 border-yellow-400 bg-white flex items-center justify-center overflow-hidden shadow-sm shrink-0 mb-6">
-          {logo ? (
-            <img src={logo} alt="Shop Logo" className="w-full h-full object-cover" />
+          {vm.logo ? (
+            <img src={vm.logo} alt="Shop Logo" className="w-full h-full object-cover" />
           ) : (
             <XeroxLogoSVG />
           )}
         </div>
 
         <h1 className="text-3xl font-black tracking-tight text-center text-slate-950 uppercase w-full">
-          {shopInfo?.store_name || 'Loading...'}
+          {vm.shopInfo?.store_name || 'Loading...'}
         </h1>
         <p className="text-slate-500 text-center text-sm font-semibold tracking-wide uppercase mt-2 w-full">
           XEROX • PRINT • SCAN • LAMINATION
         </p>
         <div className="w-full flex justify-end pr-3.5 mb-8 -mt-0.5 animate-pulse">
           <Link href="/" className="text-[10px] font-extrabold text-yellow-600 uppercase tracking-widest hover:underline cursor-pointer">
-            Digitalised by XeroxFlow
+            Digitalised by PrintDedo
           </Link>
         </div>
 
-        <form onSubmit={handleOpenSummaryModal} className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 w-full flex flex-col space-y-5">
+        <form onSubmit={vm.handleOpenSummaryModal} className="bg-white border border-slate-200 shadow-sm rounded-2xl p-6 w-full flex flex-col space-y-5">
           
-          {errorMsg && (
+          {vm.errorMsg && (
             <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm text-center">
-              {errorMsg}
+              {vm.errorMsg}
             </div>
           )}
 
-          {/* Attached Documents List (If any attached docs exist) */}
-          {attachedDocs.length > 0 && (
+          {/* Attached Documents List */}
+          {vm.attachedDocs.length > 0 && (
             <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  Attached Documents ({attachedDocs.length})
+                  Attached Documents ({vm.attachedDocs.length})
                 </span>
                 <span className="text-xs font-extrabold text-slate-900 bg-yellow-300/80 px-2 py-0.5 rounded border border-yellow-400">
-                  ₹{attachedTotalCost.toFixed(2)} Subtotal
+                  ₹{vm.attachedTotalCost.toFixed(2)} Subtotal
                 </span>
               </div>
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {attachedDocs.map((doc) => (
+                {vm.attachedDocs.map((doc) => (
                   <div key={doc.id} className="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl text-xs font-medium shadow-2xs">
                     <div className="flex items-center space-x-2.5 min-w-0 pr-2">
                       <FileText className="w-5 h-5 text-yellow-500 shrink-0" />
@@ -702,7 +108,7 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
                       <span className="font-extrabold text-slate-900">₹{doc.itemCost.toFixed(2)}</span>
                       <button
                         type="button"
-                        onClick={() => handleRemoveAttachedDoc(doc.id)}
+                        onClick={() => vm.handleRemoveAttachedDoc(doc.id)}
                         className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition border-none bg-transparent cursor-pointer shrink-0"
                         title="Remove document"
                       >
@@ -720,69 +126,69 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
             <input 
               type="file" 
               accept=".pdf"
-              onChange={handleFileChange}
+              onChange={vm.handleFileChange}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />
             
             <FileText className="w-10 h-10 text-yellow-500 mx-auto mb-2" />
             <p className="text-sm font-bold text-slate-700">
-              {file ? file.name : (attachedDocs.length > 0 ? 'Attach Another PDF Document' : 'Click to Upload PDF Document')}
+              {vm.file ? vm.file.name : (vm.attachedDocs.length > 0 ? 'Attach Another PDF Document' : 'Click to Upload PDF Document')}
             </p>
             <p className="text-xs text-slate-400 mt-1">PDF files only (Max 20MB)</p>
-            {pdfPageCount !== null && (
+            {vm.pdfPageCount !== null && (
               <div className="mt-2 inline-flex items-center space-x-1.5 bg-yellow-100/80 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200 animate-fade-in">
-                <span>📄 {pdfPageCount} {pdfPageCount === 1 ? 'Page' : 'Pages'} Detected</span>
+                <span>📄 {vm.pdfPageCount} {vm.pdfPageCount === 1 ? 'Page' : 'Pages'} Detected</span>
               </div>
             )}
           </div>
 
           {/* Page Selection Controls */}
-          {file && (
+          {vm.file && (
             <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                   Pages to Print
                 </span>
                 <span className="text-xs font-extrabold text-slate-900 bg-yellow-300/80 px-2 py-0.5 rounded border border-yellow-400">
-                  {selectedPagesCount} {selectedPagesCount === 1 ? 'Page' : 'Pages'} Selected
+                  {vm.selectedPagesCount} {vm.selectedPagesCount === 1 ? 'Page' : 'Pages'} Selected
                 </span>
               </div>
 
               <div className="grid grid-cols-3 gap-1.5 bg-slate-200/60 p-1 rounded-xl text-xs font-bold text-slate-700">
                 <button
                   type="button"
-                  onClick={() => setPageSelectionMode('all')}
-                  className={`py-1.5 rounded-lg transition-all border-none cursor-pointer ${pageSelectionMode === 'all' ? 'bg-yellow-400 text-black shadow-xs' : 'hover:bg-slate-200/80 bg-transparent'}`}
+                  onClick={() => vm.setPageSelectionMode('all')}
+                  className={`py-1.5 rounded-lg transition-all border-none cursor-pointer ${vm.pageSelectionMode === 'all' ? 'bg-yellow-400 text-black shadow-xs' : 'hover:bg-slate-200/80 bg-transparent'}`}
                 >
-                  All Pages {pdfPageCount ? `(${pdfPageCount})` : ''}
+                  All Pages {vm.pdfPageCount ? `(${vm.pdfPageCount})` : ''}
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPageSelectionMode('range')}
-                  className={`py-1.5 rounded-lg transition-all border-none cursor-pointer ${pageSelectionMode === 'range' ? 'bg-yellow-400 text-black shadow-xs' : 'hover:bg-slate-200/80 bg-transparent'}`}
+                  onClick={() => vm.setPageSelectionMode('range')}
+                  className={`py-1.5 rounded-lg transition-all border-none cursor-pointer ${vm.pageSelectionMode === 'range' ? 'bg-yellow-400 text-black shadow-xs' : 'hover:bg-slate-200/80 bg-transparent'}`}
                 >
                   Page Range
                 </button>
                 <button
                   type="button"
-                  onClick={() => setPageSelectionMode('custom')}
-                  className={`py-1.5 rounded-lg transition-all border-none cursor-pointer ${pageSelectionMode === 'custom' ? 'bg-yellow-400 text-black shadow-xs' : 'hover:bg-slate-200/80 bg-transparent'}`}
+                  onClick={() => vm.setPageSelectionMode('custom')}
+                  className={`py-1.5 rounded-lg transition-all border-none cursor-pointer ${vm.pageSelectionMode === 'custom' ? 'bg-yellow-400 text-black shadow-xs' : 'hover:bg-slate-200/80 bg-transparent'}`}
                 >
                   Specific Pages
                 </button>
               </div>
 
               {/* Page Range Inputs */}
-              {pageSelectionMode === 'range' && (
+              {vm.pageSelectionMode === 'range' && (
                 <div className="grid grid-cols-2 gap-3 pt-1 animate-fade-in">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">From Page</label>
                     <input
                       type="number"
                       min="1"
-                      max={pdfPageCount || undefined}
-                      value={fromPage}
-                      onChange={(e) => setFromPage(Math.max(1, parseInt(e.target.value) || 1))}
+                      max={vm.pdfPageCount || undefined}
+                      value={vm.fromPage}
+                      onChange={(e) => vm.setFromPage(Math.max(1, parseInt(e.target.value) || 1))}
                       className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white"
                     />
                   </div>
@@ -790,27 +196,45 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">To Page</label>
                     <input
                       type="number"
-                      min={fromPage}
-                      max={pdfPageCount || undefined}
-                      value={toPage}
-                      onChange={(e) => setToPage(Math.max(fromPage, parseInt(e.target.value) || fromPage))}
+                      min={vm.fromPage}
+                      max={vm.pdfPageCount || undefined}
+                      value={vm.toPage}
+                      onChange={(e) => vm.setToPage(Math.max(vm.fromPage, parseInt(e.target.value) || vm.fromPage))}
                       className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white"
                     />
                   </div>
+                </div>
+              )}
+
+              {/* Specific Pages Input */}
+              {vm.pageSelectionMode === 'custom' && (
+                <div className="pt-1 animate-fade-in space-y-1">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    Specific Pages (e.g. 1, 3, 5-8)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 1, 3, 5-8"
+                    value={vm.customPagesInput}
+                    onChange={(e) => vm.setCustomPagesInput(e.target.value)}
+                    maxLength={100}
+                    className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white focus:outline-none focus:border-yellow-400"
+                  />
+                  <p className="text-[10px] text-slate-400 font-medium">Use commas for individual pages and hyphens for page ranges.</p>
                 </div>
               )}
             </div>
           )}
 
           {/* Custom Add-ons Checkboxes */}
-          {file && addons.length > 0 && (
+          {vm.file && vm.addons.length > 0 && (
             <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2.5 animate-in fade-in slide-in-from-bottom-2 duration-200">
               <span className="block text-xs font-bold text-slate-500 uppercase tracking-wider">
                 Add-on Services (Optional)
               </span>
               <div className="space-y-2">
-                {addons.map((addon) => {
-                  const isChecked = selectedAddons.includes(addon.id);
+                {vm.addons.map((addon) => {
+                  const isChecked = vm.selectedAddons.includes(addon.id);
                   return (
                     <label 
                       key={addon.id} 
@@ -822,9 +246,9 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
                           checked={isChecked}
                           onChange={() => {
                             if (isChecked) {
-                              setSelectedAddons(selectedAddons.filter(id => id !== addon.id));
+                              vm.setSelectedAddons(vm.selectedAddons.filter(id => id !== addon.id));
                             } else {
-                              setSelectedAddons([...selectedAddons, addon.id]);
+                              vm.setSelectedAddons([...vm.selectedAddons, addon.id]);
                             }
                           }}
                           className="w-4 h-4 accent-yellow-400 cursor-pointer rounded focus:ring-0"
@@ -842,23 +266,24 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
           )}
 
           {/* Copies & Print Type Settings */}
-          {file && (
+          {vm.file && (
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Copies</label>
                 <input 
                   type="number" 
                   min="1"
-                  value={quantity}
-                  onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                  max="100"
+                  value={vm.quantity}
+                  onChange={(e) => vm.setQuantity(Math.max(1, Math.min(100, parseInt(e.target.value) || 1)))}
                   className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 focus:outline-none text-slate-900 text-sm font-medium"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Print Type</label>
                 <select 
-                  value={printType}
-                  onChange={(e) => setPrintType(e.target.value)}
+                  value={vm.printType}
+                  onChange={(e) => vm.setPrintType(e.target.value)}
                   className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 focus:outline-none bg-white text-slate-900 text-sm font-medium"
                 >
                   <option value="bw">B&W (Single)</option>
@@ -871,10 +296,10 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
           )}
 
           {/* Button to attach current document */}
-          {file && (
+          {vm.file && (
             <button
               type="button"
-              onClick={handleAttachAnother}
+              onClick={vm.handleAttachAnother}
               className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold py-3 rounded-xl transition cursor-pointer border border-slate-200 flex items-center justify-center gap-2 text-sm shadow-xs"
             >
               <Plus className="w-4 h-4 text-slate-700" />
@@ -888,10 +313,11 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
               <label className="block text-sm font-medium text-slate-700 mb-1">Your Name</label>
               <input 
                 type="text" 
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={vm.name}
+                onChange={(e) => vm.setName(e.target.value)}
                 placeholder="Name"
                 required
+                maxLength={100}
                 className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 focus:outline-none text-slate-900 text-sm font-medium"
               />
             </div>
@@ -901,9 +327,10 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
               </label>
               <input 
                 type="tel" 
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                value={vm.phone}
+                onChange={(e) => vm.setPhone(e.target.value)}
                 placeholder="Phone Number"
+                maxLength={20}
                 className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 focus:outline-none text-slate-900 text-sm font-medium"
               />
             </div>
@@ -912,138 +339,39 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
           {/* Submit */}
           <button 
             type="submit" 
-            disabled={totalBatchDocsCount === 0 || uploading || !name}
+            disabled={vm.totalBatchDocsCount === 0 || vm.uploading || !vm.name}
             className="w-full bg-yellow-400 text-black font-bold py-3.5 rounded-xl hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex justify-between items-center px-6 mt-2 cursor-pointer shadow-sm border-none"
           >
             <span>Review Order</span>
-            {!uploading && (
+            {!vm.uploading && (
               <span className="bg-black/10 px-3 py-1 rounded-lg text-sm font-bold">
-                ₹{grandTotalCost.toFixed(2)}
+                ₹{vm.grandTotalCost.toFixed(2)}
               </span>
             )}
           </button>
         </form>
 
-        {/* Modal: Order Summary & Print Settings Confirmation */}
-        {isSummaryModalOpen && (
-          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl w-full max-w-md text-left space-y-4 animate-scale-in relative max-h-[90vh] overflow-y-auto">
-              <button 
-                onClick={() => setIsSummaryModalOpen(false)}
-                className="absolute right-5 top-5 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition border-none bg-transparent cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              <div className="flex items-center space-x-3 pb-3 border-b border-slate-100 pr-8">
-                <div className="bg-yellow-100 p-2.5 rounded-2xl text-yellow-700 shrink-0">
-                  <FileText className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-950 uppercase tracking-wide leading-tight">
-                    Please review your settings before submitting
-                  </h3>
-                </div>
-              </div>
-
-              {/* Documents List */}
-              <div className="space-y-2">
-                <span className="block text-[11px] font-black text-slate-500 uppercase tracking-wider">
-                  Configured Documents ({totalBatchDocsCount})
-                </span>
-                <div className="space-y-2.5 max-h-[40vh] overflow-y-auto pr-1">
-                  {[...attachedDocs, ...(file ? [{
-                    id: 'active_doc',
-                    file,
-                    pdfPageCount,
-                    pageSelectionMode,
-                    fromPage,
-                    toPage,
-                    customPagesInput,
-                    selectedPagesCount,
-                    quantity,
-                    printType,
-                    selectedAddons: [...selectedAddons],
-                    itemCost: currentDocCost
-                  }] : [])].map((doc, idx) => {
-                    let pageText = 'All Pages';
-                    if (doc.pageSelectionMode === 'range') pageText = `Pages ${doc.fromPage} - ${doc.toPage}`;
-                    else if (doc.pageSelectionMode === 'custom') pageText = `Pages ${doc.customPagesInput || 'Custom'}`;
-                    else if (doc.pdfPageCount) pageText = `All ${doc.pdfPageCount} Pages`;
-
-                    const formatPrintTypeLabel = (t: string) => {
-                      if (t === 'bw') return 'B&W (Single)';
-                      if (t === 'bw_double') return 'B&W (Double)';
-                      if (t === 'color') return 'Color (Single)';
-                      if (t === 'color_double') return 'Color (Double)';
-                      return t;
-                    };
-
-                    const addonNames = doc.selectedAddons
-                      .map(id => addons.find(a => a.id === id)?.name)
-                      .filter(Boolean);
-
-                    return (
-                      <div key={doc.id || idx} className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200/90 space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-black text-slate-900 truncate" title={doc.file.name}>{doc.file.name}</p>
-                            <p className="text-[11px] text-slate-500 font-semibold mt-0.5">{pageText}</p>
-                          </div>
-                          <span className="text-xs font-black text-yellow-600 shrink-0 bg-yellow-50 px-2 py-0.5 rounded-lg border border-yellow-200">
-                            ₹{doc.itemCost.toFixed(2)}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center space-x-2 text-[11px] text-slate-600 font-medium pt-1 border-t border-slate-200/60">
-                          <span>Print Mode: <strong className="text-slate-900">{formatPrintTypeLabel(doc.printType)}</strong></span>
-                          <span>•</span>
-                          <span>Copies: <strong className="text-slate-900">{doc.quantity}</strong></span>
-                        </div>
-
-                        {addonNames.length > 0 && (
-                          <div className="text-[11px] text-purple-700 bg-purple-50 px-2.5 py-1 rounded-lg border border-purple-100 font-semibold">
-                            Add-ons: {addonNames.join(', ')}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Total Amount Card */}
-              <div className="bg-slate-950 text-white p-3.5 rounded-2xl flex items-center justify-between shadow-xs">
-                <div>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Grand Total</p>
-                  <p className="text-[11px] text-slate-300 font-medium">{totalBatchDocsCount} {totalBatchDocsCount > 1 ? 'Files' : 'File'} Configured</p>
-                </div>
-                <p className="text-xl font-black text-yellow-400">₹{grandTotalCost.toFixed(2)}</p>
-              </div>
-
-              {/* Actions */}
-              <div className="space-y-2 pt-1">
-                <button
-                  type="button"
-                  onClick={executeFinalUpload}
-                  disabled={uploading}
-                  className="w-full bg-yellow-400 hover:bg-yellow-500 text-black font-black py-3.5 rounded-xl transition shadow-sm cursor-pointer border-none text-xs uppercase tracking-wider disabled:opacity-50"
-                >
-                  {uploading ? 'Sending to Queue...' : 'Confirm & Submit to Queue'}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setIsSummaryModalOpen(false)}
-                  disabled={uploading}
-                  className="w-full bg-white hover:bg-slate-50 text-slate-700 font-bold py-2.5 rounded-xl border border-slate-200 transition cursor-pointer text-xs disabled:opacity-50"
-                >
-                  Edit Order / Go Back
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        <OrderSummaryModal
+          isOpen={vm.isSummaryModalOpen}
+          onClose={() => vm.setIsSummaryModalOpen(false)}
+          attachedDocs={vm.attachedDocs}
+          file={vm.file}
+          pdfPageCount={vm.pdfPageCount}
+          pageSelectionMode={vm.pageSelectionMode}
+          fromPage={vm.fromPage}
+          toPage={vm.toPage}
+          customPagesInput={vm.customPagesInput}
+          selectedPagesCount={vm.selectedPagesCount}
+          quantity={vm.quantity}
+          printType={vm.printType}
+          selectedAddons={vm.selectedAddons}
+          currentDocCost={vm.currentDocCost}
+          grandTotalCost={vm.grandTotalCost}
+          totalBatchDocsCount={vm.totalBatchDocsCount}
+          addons={vm.addons}
+          uploading={vm.uploading}
+          onConfirmUpload={vm.executeFinalUpload}
+        />
         
         <p className="text-xs text-slate-400 mt-8 text-center px-4">
           Documents are encrypted and automatically deleted 10 minutes after upload to protect your privacy.
@@ -1052,4 +380,3 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
     </div>
   );
 }
-

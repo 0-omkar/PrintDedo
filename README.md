@@ -1,6 +1,6 @@
-# 🖨️ XeroxFlow
+# 🖨️ PrintDedo
 
-A modern, real-time print queue and shop management platform built for Xerox and print shops. **XeroxFlow** simplifies customer document uploads, automates instant price estimation, provides a live order queue for shop owners, and offers super-admin subscription management.
+A modern, real-time print queue and shop management platform built for Xerox and print shops. **PrintDedo** simplifies customer document uploads, automates instant price estimation, provides a live order queue for shop owners, and offers super-admin subscription management.
 
 ---
 
@@ -72,7 +72,7 @@ Create a `.env.local` file in the root directory and configure the following var
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-NEXT_PUBLIC_ADMIN_EMAIL=admin@xeroxflow.com
+NEXT_PUBLIC_ADMIN_EMAIL=admin@printdedo.com
 NEXT_PUBLIC_ADMIN_PASSWORD=your_admin_password
 ```
 

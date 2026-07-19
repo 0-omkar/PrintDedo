@@ -1,6 +1,6 @@
-# XeroxFlow Project Context
+# PrintDedo Project Context
 
-This file serves as the handover and history context for developers or other AI agents working on XeroxFlow.
+This file serves as the handover and history context for developers or other AI agents working on PrintDedo.
 
 ---
 
@@ -124,17 +124,25 @@ This file serves as the handover and history context for developers or other AI 
 - **File(s) Modified/Created:**
   - [NEW] [security_audit.md](file:///Users/omkar/Desktop/macbook%20air%20back-up/Projects/zerox/security_audit.md)
 
-### Entry 17: 2026-07-18
-- **Prompt:** Connect local app to the new Supabase project (`PrintDedo`).
-- **Action/Edits:** Updated `.env.local` with the new Supabase project URL (`https://iyhmoiqbkxhpznqalnal.supabase.co`) and anon public key.
+### Entry 18: 2026-07-19
+- **Prompt:** Can you please rename xeroxflow to PrintDedo throughout the website
+- **Action/Edits:** Renamed all user-facing branding and localStorage/sessionStorage keys from `XeroxFlow` / `xeroxflow` to `PrintDedo` / `printdedo` across the entire codebase (`layout.tsx`, `page.tsx`, `contact-admin/page.tsx`, `renew/page.tsx`, `admin/page.tsx`, `dashboard/page.tsx`, `shop/[shopId]/page.tsx`, `README.md`, and `context`).
 - **File(s) Modified/Created:**
-  - [MODIFY] [.env.local](file:///Users/omkar/Desktop/macbook%20air%20back-up/Projects/zerox/.env.local)
+  - [MODIFY] [app/layout.tsx](file:///Users/omkar/Desktop/macbook%20air%20back-up/Projects/zerox/app/layout.tsx)
+  - [MODIFY] [app/page.tsx](file:///Users/omkar/Desktop/macbook%20air%20back-up/Projects/zerox/app/page.tsx)
+  - [MODIFY] [app/contact-admin/page.tsx](file:///Users/omkar/Desktop/macbook%20air%20back-up/Projects/zerox/app/contact-admin/page.tsx)
+  - [MODIFY] [app/renew/page.tsx](file:///Users/omkar/Desktop/macbook%20air%20back-up/Projects/zerox/app/renew/page.tsx)
+  - [MODIFY] [app/admin/page.tsx](file:///Users/omkar/Desktop/macbook%20air%20back-up/Projects/zerox/app/admin/page.tsx)
+  - [MODIFY] [app/dashboard/page.tsx](file:///Users/omkar/Desktop/macbook%20air%20back-up/Projects/zerox/app/dashboard/page.tsx)
+  - [MODIFY] [app/shop/\[shopId\]/page.tsx](file:///Users/omkar/Desktop/macbook%20air%20back-up/Projects/zerox/app/shop/%5BshopId%5D/page.tsx)
+  - [MODIFY] [README.md](file:///Users/omkar/Desktop/macbook%20air%20back-up/Projects/zerox/README.md)
+  - [MODIFY] [context](file:///Users/omkar/Desktop/macbook%20air%20back-up/Projects/zerox/context)
 
 ---
 
 ## 🛠️ Project Overview
 
-**XeroxFlow** is a multi-tenant print-queue web application built for local print/xerox shops. It allows shop owners to register their shop, set up pricing, and display a dynamic QR code. Customers scan the QR code to access a print dropbox page, upload a PDF document, preview/calculate costs in real-time, and optionally pay via UPI. The uploaded print job then appears in the shop owner's live queue dashboard for immediate printing.
+**PrintDedo** is a multi-tenant print-queue web application built for local print/xerox shops. It allows shop owners to register their shop, set up pricing, and display a dynamic QR code. Customers scan the QR code to access a print dropbox page, upload a PDF document, preview/calculate costs in real-time, and optionally pay via UPI. The uploaded print job then appears in the shop owner's live queue dashboard for immediate printing.
 
 ### Tech Stack
 - **Framework:** Next.js 16.2.1 (React 19.2.4)
@@ -188,12 +196,12 @@ Here is the breakdown of files in the project and their core purposes:
    - Uploads PDFs to `xerox-files` storage bucket and saves details to the `orders` database. Appends selected add-on names to the `customer_name` string.
    - Displays a success state with a UPI link (`upi://pay`) for easy QR/deeplink payments.
    - Integrates a simple star-rating and feedback submission modal on successful upload.
-   - Logs customer upload file sizes to LocalStorage under `xeroxflow_storage_logs`.
+   - Logs customer upload file sizes to LocalStorage under `printdedo_storage_logs`.
    - Blocks uploads with a "Service Suspended" overlay if shop subscription is expired.
 
 7. **`app/admin/page.tsx`**
    - The admin management console dashboard.
-   - Logs in using static administrator credentials (`admin@xeroxflow.com` / `admin123`).
+   - Logs in using static administrator credentials (`admin@printdedo.com` / `admin123`).
    - Lists active print shops registered.
    - Displays current storage utilization (audited from folder files listing) and last 24h upload volume (audited from local storage upload logs).
    - Features a shop provisioning form to register new print shop owner credentials and assign subscription terms.

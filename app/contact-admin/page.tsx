@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Printer, Mail, Phone, MapPin, Send, CheckCircle2, ArrowLeft, User, ExternalLink, Loader2 } from 'lucide-react';
+import { Mail, Phone, MapPin, Send, CheckCircle2, ArrowLeft, User, ExternalLink, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
+import { BackgroundDecorations } from '@/components/BackgroundDecorations';
+import { BrandLogo } from '@/components/BrandLogo';
 
 export default function ContactAdminPage() {
   const [name, setName] = useState('');
@@ -15,6 +17,7 @@ export default function ContactAdminPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !message) return;
+    if (name.length > 100 || email.length > 120 || message.length > 2000) return;
     setSubmitting(true);
 
     const newMsg = {
@@ -40,13 +43,13 @@ export default function ContactAdminPage() {
     }
 
     if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('xeroxflow_admin_messages');
+      const stored = localStorage.getItem('printdedo_admin_messages');
       let list: any[] = [];
       if (stored) {
         try { list = JSON.parse(stored); } catch(e) {}
       }
       list.unshift(newMsg);
-      localStorage.setItem('xeroxflow_admin_messages', JSON.stringify(list));
+      localStorage.setItem('printdedo_admin_messages', JSON.stringify(list));
     }
 
     setSubmitting(false);
@@ -55,19 +58,11 @@ export default function ContactAdminPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col justify-between relative overflow-hidden">
-      <div className="absolute -top-24 -right-24 h-80 w-80 rounded-full bg-yellow-100 blur-3xl opacity-60 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-yellow-50 blur-3xl opacity-60 pointer-events-none" />
+      <BackgroundDecorations />
 
       {/* Navigation Header */}
       <nav className="relative z-10 flex items-center justify-between px-6 py-6 max-w-6xl mx-auto w-full select-none">
-        <Link href="/" className="flex items-center space-x-3 group cursor-pointer no-underline text-inherit">
-          <div className="bg-yellow-400 p-2.5 rounded-2xl shadow-xs group-hover:scale-105 transition-transform duration-200">
-            <Printer className="w-7 h-7 text-black" />
-          </div>
-          <span className="text-3xl font-extrabold tracking-tight text-slate-950">
-            Xerox<span className="text-yellow-500">Flow</span>
-          </span>
-        </Link>
+        <BrandLogo size="md" />
 
         <Link 
           href="/" 
@@ -89,7 +84,7 @@ export default function ContactAdminPage() {
                 Support & Contact
               </span>
               <h1 className="text-3xl font-black text-slate-950 tracking-tight mt-3">
-                Contact XeroxFlow Admin
+                Contact PrintDedo Admin
               </h1>
               <p className="text-slate-500 text-sm mt-2 leading-relaxed font-medium">
                 Need help with your Xerox shop account, subscription, or technical setup? Reach out directly to our team.
@@ -171,7 +166,7 @@ export default function ContactAdminPage() {
                 <CheckCircle2 className="w-14 h-14 text-green-500 mx-auto" />
                 <h3 className="text-xl font-bold text-slate-900">Message Received!</h3>
                 <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
-                  Thank you for contacting XeroxFlow Admin. Our support team will respond to <strong>{email}</strong> shortly.
+                  Thank you for contacting PrintDedo Admin. Our support team will respond to <strong>{email}</strong> shortly.
                 </p>
                 <button
                   onClick={() => setSubmitted(false)}
@@ -193,6 +188,7 @@ export default function ContactAdminPage() {
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g. Omkar Varpe"
                     className="w-full p-3 border border-slate-200 rounded-xl text-sm font-medium bg-white focus:outline-none focus:border-yellow-400"
+                    maxLength={100}
                   />
                 </div>
 
@@ -205,6 +201,7 @@ export default function ContactAdminPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="e.g. omkar@gmail.com"
                     className="w-full p-3 border border-slate-200 rounded-xl text-sm font-medium bg-white focus:outline-none focus:border-yellow-400"
+                    maxLength={120}
                   />
                 </div>
 
@@ -217,6 +214,7 @@ export default function ContactAdminPage() {
                     onChange={(e) => setMessage(e.target.value)}
                     placeholder="Describe your query or request..."
                     className="w-full p-3 border border-slate-200 rounded-xl text-sm font-medium bg-white focus:outline-none focus:border-yellow-400 resize-none"
+                    maxLength={2000}
                   />
                 </div>
 
@@ -244,7 +242,7 @@ export default function ContactAdminPage() {
       {/* Footer */}
       <footer className="relative z-10 w-full py-4 text-center border-t border-slate-100 bg-white/80 backdrop-blur-sm">
         <p className="text-xs text-slate-500 font-medium">
-          © {new Date().getFullYear()} XeroxFlow. All rights reserved.
+          © {new Date().getFullYear()} PrintDedo. All rights reserved.
         </p>
       </footer>
     </div>

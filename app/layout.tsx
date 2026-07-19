@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "XeroxFlow | Premium Print Queue",
+  title: "",
   description: "The ultimate multi-tenant print-queue system for modern Xerox shops.",
 };
 

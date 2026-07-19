@@ -1,13 +1,12 @@
 'use client';
 import Link from 'next/link';
 import { ShieldAlert } from 'lucide-react';
+import { BackgroundDecorations } from '@/components/BackgroundDecorations';
 
 export default function SignupPage() {
   return (
     <div className="min-h-screen bg-white font-sans text-slate-900 flex flex-col items-center justify-center py-2 relative overflow-hidden">
-      {/* Background decorations */}
-      <div className="absolute -top-24 -right-24 h-80 w-80 rounded-full bg-yellow-100/50 blur-3xl opacity-60 pointer-events-none" />
-      <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-yellow-50/50 blur-3xl opacity-60 pointer-events-none" />
+      <BackgroundDecorations />
 
       <main className="relative z-10 flex flex-col items-center justify-center w-full flex-1 px-4 sm:px-20 text-center">
         <div className="bg-yellow-100 p-4 rounded-full border border-yellow-200 mb-6 inline-flex items-center justify-center animate-bounce text-yellow-600">
