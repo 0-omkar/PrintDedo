@@ -113,22 +113,22 @@ export default function Home() {
       {/* Hero Section */}
       <section className="relative z-10 pt-8 pb-16 md:pt-16 md:pb-24 max-w-6xl mx-auto px-6 text-center w-full">
         {/* Pill Badge */}
-        <div className="inline-flex items-center space-x-2.5 bg-yellow-400/15 border border-yellow-400/40 px-4 py-2 rounded-full mb-6 shadow-xs select-none animate-bounce duration-1000">
+        <div className="inline-flex items-center space-x-2.5 bg-yellow-400/15 border border-yellow-400/40 px-4 py-2 rounded-full mb-6 shadow-xs select-none">
           <Sparkles className="w-4 h-4 text-yellow-600 fill-yellow-400" />
           <span className="text-xs font-black uppercase tracking-wider text-slate-900">
-            Smart Printing Infrastructure for Modern Xerox Shops
+            The digital upgrade for modern Xerox shops
           </span>
         </div>
 
         {/* Hero Headline */}
         <h1 className="text-4xl md:text-6xl lg:text-7xl font-black tracking-tight mb-6 leading-[1.1] text-slate-950 uppercase">
-          A clean print queue <br className="hidden sm:block" />
-          for <span className="bg-yellow-400 text-black px-3 py-1 rounded-2xl inline-block -rotate-1 shadow-sm">modern Xerox shops</span>
+          Simple software.<br className="hidden sm:block" />
+          <span className="bg-yellow-400 text-black px-3 py-1 rounded-2xl inline-block -rotate-1 shadow-sm">Effortless management.</span>
         </h1>
 
         {/* Sub-headline */}
         <p className="text-base md:text-xl text-slate-600 max-w-2xl mx-auto mb-8 leading-relaxed font-medium">
-          Eliminate WhatsApp clutter & pendrive viruses. Customers scan your unique shop QR code, configure print options, and upload PDFs directly to your live queue.
+          Eliminate WhatsApp clutter &amp; pendrive viruses. Customers scan your shop QR, configure print options, and upload PDFs directly to your live queue.
         </p>
 
         {/* Main CTA Buttons */}
