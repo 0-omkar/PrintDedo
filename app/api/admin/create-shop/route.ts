@@ -40,7 +40,11 @@ export async function POST(request: Request) {
     });
 
     if (authError) {
-      return NextResponse.json({ error: authError.message }, { status: 400 });
+      let friendlyError = authError.message;
+      if (authError.message.toLowerCase().includes('user not allowed')) {
+        friendlyError = 'User creation blocked. Please ensure SUPABASE_SERVICE_ROLE_KEY is set in .env.local/Vercel, or enable "Allow new users to sign up" in Supabase Dashboard -> Authentication -> Providers -> Email.';
+      }
+      return NextResponse.json({ error: friendlyError }, { status: 400 });
     }
 
     if (authData.user) {

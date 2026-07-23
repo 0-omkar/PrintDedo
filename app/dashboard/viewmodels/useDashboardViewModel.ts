@@ -132,10 +132,26 @@ export function useDashboardViewModel() {
   };
 
   const fetchOrders = async (sId: string) => {
-    const tenMinutesAgoDate = new Date(Date.now() - 10 * 60 * 1000);
-    const tenMinutesAgoIso = tenMinutesAgoDate.toISOString();
+    const tenMinutesAgoIso = new Date(Date.now() - 10 * 60 * 1000).toISOString();
 
+    // 1. Delete orders & their Cloudflare R2 storage files older than 10 minutes
     try {
+      const { data: expiredOrders } = await supabase
+        .from('orders')
+        .select('file_path')
+        .eq('shop_id', sId)
+        .eq('status', 'pending')
+        .lt('created_at', tenMinutesAgoIso);
+
+      if (expiredOrders && expiredOrders.length > 0) {
+        const { deleteR2File } = await import('@/lib/r2');
+        for (const exp of expiredOrders) {
+          if (exp.file_path) {
+            deleteR2File(exp.file_path).catch(() => {});
+          }
+        }
+      }
+
       await supabase
         .from('orders')
         .delete()
