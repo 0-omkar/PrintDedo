@@ -197,7 +197,7 @@ export function useShopDropBoxViewModel(shopId: string) {
       return selectedFile;
     }
 
-    // 1. Images (.jpg, .jpeg, .png, .webp)
+    // Images (.jpg, .jpeg, .png, .webp)
     if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg') || nameLower.endsWith('.png') || nameLower.endsWith('.webp')) {
       const arrayBuffer = await selectedFile.arrayBuffer();
       const pdfDoc = await PDFDocument.create();
@@ -207,7 +207,6 @@ export function useShopDropBoxViewModel(shopId: string) {
         try {
           embeddedImg = await pdfDoc.embedPng(arrayBuffer);
         } catch (e) {
-          // Fallback via Canvas
           const imgBlobUrl = URL.createObjectURL(selectedFile);
           const img = new Image();
           img.src = imgBlobUrl;
@@ -260,19 +259,27 @@ export function useShopDropBoxViewModel(shopId: string) {
       return new File([Buffer.from(pdfBytes)], pdfFileName, { type: 'application/pdf' });
     }
 
-    // 2. Text / CSV documents (.txt, .csv)
+    // Text / CSV documents (.txt, .csv, .log)
     if (nameLower.endsWith('.txt') || nameLower.endsWith('.csv') || nameLower.endsWith('.log')) {
       const text = await selectedFile.text();
       const pdfDoc = await PDFDocument.create();
-      const page = pdfDoc.addPage([595.28, 841.89]);
+      const lines = text.split('\n');
+      const linesPerPage = 45;
       
-      const lines = text.split('\n').slice(0, 45);
-      let yPos = 800;
-      for (const line of lines) {
-        const cleanLine = line.replace(/[^\x20-\x7E]/g, '');
-        page.drawText(cleanLine.substring(0, 75), { x: 40, y: yPos, size: 10 });
-        yPos -= 16;
-        if (yPos < 40) break;
+      for (let i = 0; i < lines.length; i += linesPerPage) {
+        const page = pdfDoc.addPage([595.28, 841.89]);
+        const pageLines = lines.slice(i, i + linesPerPage);
+        let yPos = 800;
+        
+        for (const line of pageLines) {
+          const cleanLine = line.replace(/[^\x20-\x7E]/g, '');
+          page.drawText(cleanLine.substring(0, 80), { x: 40, y: yPos, size: 10 });
+          yPos -= 16;
+        }
+      }
+
+      if (pdfDoc.getPageCount() === 0) {
+        pdfDoc.addPage([595.28, 841.89]);
       }
 
       const pdfBytes = await pdfDoc.save();
@@ -280,25 +287,29 @@ export function useShopDropBoxViewModel(shopId: string) {
       return new File([Buffer.from(pdfBytes)], pdfFileName, { type: 'application/pdf' });
     }
 
-    // 3. Office Documents (.docx, .pptx, .xlsx, .doc, .ppt)
-    const pdfDoc = await PDFDocument.create();
-    const page = pdfDoc.addPage([595.28, 841.89]);
-    const cleanDocName = selectedFile.name.replace(/[^\x20-\x7E]/g, '_');
-    const ext = selectedFile.name.split('.').pop()?.toUpperCase() || 'DOC';
-    
-    page.drawText(`Document: ${cleanDocName.substring(0, 50)}`, { x: 50, y: 780, size: 14 });
-    page.drawText(`Format: ${ext}`, { x: 50, y: 750, size: 11 });
-    page.drawText(`Ready for shop printing.`, { x: 50, y: 720, size: 11 });
-    
-    const pdfBytes = await pdfDoc.save();
-    const pdfFileName = selectedFile.name.replace(/\.[^/.]+$/, '') + '.pdf';
-    return new File([Buffer.from(pdfBytes)], pdfFileName, { type: 'application/pdf' });
+    throw new Error('Unsupported format');
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       let selectedFile = e.target.files[0];
-      
+      const nameLower = selectedFile.name.toLowerCase();
+
+      // Catch Word / PowerPoint / Excel files and prompt user cleanly to export as PDF
+      if (
+        nameLower.endsWith('.docx') || 
+        nameLower.endsWith('.doc') || 
+        nameLower.endsWith('.pptx') || 
+        nameLower.endsWith('.ppt') || 
+        nameLower.endsWith('.xlsx') || 
+        nameLower.endsWith('.xls')
+      ) {
+        setErrorMsg('PowerPoint and Word files must be exported as PDF before uploading to guarantee exact slide layouts and page counts. Please click "File > Export as PDF" in Word/PowerPoint and upload.');
+        setFile(null);
+        setPdfPageCount(null);
+        return;
+      }
+
       if (selectedFile.size > 50 * 1024 * 1024) {
         setErrorMsg('File size exceeds maximum limit of 50MB.');
         setFile(null);
@@ -321,9 +332,10 @@ export function useShopDropBoxViewModel(shopId: string) {
         setFromPage(1);
         setToPage(count);
         setCustomPagesInput(`1-${count}`);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to parse or convert document:', err);
-        setErrorMsg('Failed to process document. Please try converting to PDF first.');
+        setErrorMsg('Please upload a PDF document or Image file (.pdf, .jpg, .png, .webp).');
+        setFile(null);
         setPdfPageCount(null);
       } finally {
         setIsParsingPdf(false);

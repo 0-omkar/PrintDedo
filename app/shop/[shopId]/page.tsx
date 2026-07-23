@@ -125,7 +125,7 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
           <div className="relative border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-yellow-400 transition-colors bg-slate-50/50">
             <input 
               type="file" 
-              accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.pptx,.xlsx,.doc,.ppt,.txt"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.txt"
               onChange={vm.handleFileChange}
               disabled={vm.uploading}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
@@ -133,9 +133,9 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
             
             <FileText className="w-10 h-10 text-yellow-500 mx-auto mb-2" />
             <p className="text-sm font-bold text-slate-700">
-              {vm.file ? vm.file.name : (vm.attachedDocs.length > 0 ? 'Attach Another Document / Image' : 'Click to Upload Document / Image')}
+              {vm.file ? vm.file.name : (vm.attachedDocs.length > 0 ? 'Attach Another File' : 'Click to Upload Document or Image')}
             </p>
-            <p className="text-xs text-slate-400 mt-1">PDF, Word, PPT, Excel, Images (Max 50MB)</p>
+            <p className="text-xs text-slate-400 mt-1">PDF, Images & Text (.pdf, .jpg, .png, .webp, .txt)</p>
 
             {vm.pdfPageCount !== null && (
               <div className="mt-2 inline-flex items-center space-x-1.5 bg-yellow-100/80 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200 animate-fade-in">
