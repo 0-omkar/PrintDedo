@@ -29,7 +29,7 @@ function getR2Client() {
 /**
  * Generates a presigned URL allowing the customer browser to upload a PDF directly to Cloudflare R2
  */
-export async function getPresignedUploadUrl(fileName: string, contentType: string = 'application/pdf') {
+export async function getPresignedUploadUrl(fileName: string) {
   try {
     if (!fileName || fileName.includes('..')) {
       throw new Error('Invalid file name for upload');
@@ -39,7 +39,6 @@ export async function getPresignedUploadUrl(fileName: string, contentType: strin
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: fileName,
-      ContentType: contentType,
     });
 
     const url = await getSignedUrl(s3Client, command, { expiresIn: 600 });
@@ -95,3 +94,36 @@ export async function deleteR2File(fileName: string) {
     return { success: false, error: error.message };
   }
 }
+
+/**
+ * Direct server-side upload to Cloudflare R2 as a bulletproof fallback
+ * if client-side presigned fetch is blocked by CORS, adblockers, or mobile network proxies.
+ */
+export async function uploadR2Direct(formData: FormData) {
+  try {
+    const file = formData.get('file') as File;
+    const fileName = formData.get('fileName') as string;
+
+    if (!file || !fileName) {
+      return { success: false, error: 'Missing file or file name for upload' };
+    }
+
+    const { s3Client, bucketName } = getR2Client();
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const command = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: fileName,
+      Body: buffer,
+      ContentType: file.type || 'application/pdf',
+    });
+
+    await s3Client.send(command);
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error in direct server R2 upload:', error);
+    return { success: false, error: error.message || 'Direct R2 upload failed' };
+  }
+}
+

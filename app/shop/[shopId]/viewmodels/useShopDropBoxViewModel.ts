@@ -292,22 +292,40 @@ export function useShopDropBoxViewModel(shopId: string) {
         const fileExt = doc.file.name.split('.').pop();
         const fileName = `${shopId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-        const { getPresignedUploadUrl } = await import('@/lib/r2');
-        const presigned = await getPresignedUploadUrl(fileName, doc.file.type || 'application/pdf');
-        if (!presigned.success || !presigned.url) {
-          throw new Error(presigned.error || 'Failed to generate upload URL for Cloudflare R2.');
+        let uploadedSuccessfully = false;
+
+        // Try direct browser upload via presigned URL first
+        try {
+          const { getPresignedUploadUrl } = await import('@/lib/r2');
+          const presigned = await getPresignedUploadUrl(fileName);
+
+          if (presigned.success && presigned.url) {
+            const uploadRes = await fetch(presigned.url, {
+              method: 'PUT',
+              body: doc.file,
+            });
+
+            if (uploadRes.ok) {
+              uploadedSuccessfully = true;
+            } else {
+              console.warn('Presigned upload HTTP status:', uploadRes.status);
+            }
+          }
+        } catch (clientErr) {
+          console.warn('Presigned browser upload failed or blocked by CORS/network. Trying direct server upload fallback...', clientErr);
         }
 
-        const uploadRes = await fetch(presigned.url, {
-          method: 'PUT',
-          body: doc.file,
-          headers: {
-            'Content-Type': doc.file.type || 'application/pdf',
-          },
-        });
+        // Automatic Fallback: If client-side fetch failed (CORS/Adblocker/Network), upload via direct Server Action
+        if (!uploadedSuccessfully) {
+          const { uploadR2Direct } = await import('@/lib/r2');
+          const formData = new FormData();
+          formData.append('file', doc.file);
+          formData.append('fileName', fileName);
 
-        if (!uploadRes.ok) {
-          throw new Error('Failed to upload PDF file to Cloudflare R2.');
+          const serverUpload = await uploadR2Direct(formData);
+          if (!serverUpload.success) {
+            throw new Error(serverUpload.error || 'Failed to upload PDF file to Cloudflare R2.');
+          }
         }
 
 
