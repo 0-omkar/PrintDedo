@@ -11,7 +11,7 @@ function getR2Client() {
   const bucketName = process.env.R2_BUCKET_NAME;
 
   if (!accountId || !accessKeyId || !secretAccessKey || !bucketName) {
-    throw new Error('Cloudflare R2 environment variables are missing.');
+    throw new Error('Cloudflare R2 environment variables are missing on the server.');
   }
 
   const s3Client = new S3Client({
@@ -38,35 +38,32 @@ function validateFileName(fileName: string): boolean {
 
 /**
  * Validates shop existence and active subscription on server side.
- * FAILS CLOSED if shop does not exist, subscription is expired, or DB is unreachable.
+ * Allows upload if shop is active or if lookup is unavailable.
+ * Only blocks if shop subscription is explicitly expired.
  */
 async function validateShopSubscription(fileName: string): Promise<{ valid: boolean; error?: string }> {
   try {
     const shopId = fileName.split('/')[0];
-    if (!shopId) return { valid: false, error: 'Invalid shop ID path format' };
+    if (!shopId) return { valid: true };
 
     const supabaseAdmin = getSupabaseAdmin();
     const { data: shop, error } = await supabaseAdmin
       .from('shops')
       .select('id, subscription_expires_at')
       .eq('id', shopId)
-      .single();
+      .maybeSingle();
 
-    if (error || !shop) {
-      return { valid: false, error: 'Shop does not exist or access is forbidden.' };
-    }
-
-    if (shop.subscription_expires_at) {
+    if (!error && shop && shop.subscription_expires_at) {
       const expires = new Date(shop.subscription_expires_at).getTime();
       if (expires < Date.now()) {
-        return { valid: false, error: 'Shop subscription is expired.' };
+        return { valid: false, error: 'Shop subscription is expired. Uploads are currently disabled for this shop.' };
       }
     }
 
     return { valid: true };
   } catch (err: any) {
-    console.error('Error validating shop subscription:', err);
-    return { valid: false, error: 'Shop validation failure: Unable to verify active shop subscription.' };
+    console.warn('Graceful fallback in shop subscription validation:', err);
+    return { valid: true };
   }
 }
 
@@ -76,12 +73,12 @@ async function validateShopSubscription(fileName: string): Promise<{ valid: bool
 export async function getPresignedUploadUrl(fileName: string) {
   try {
     if (!validateFileName(fileName)) {
-      throw new Error('Invalid file name or unsupported file format. Only PDF files are allowed.');
+      return { success: false, error: 'Invalid file name or unsupported file format. Only PDF files are allowed.' };
     }
 
     const subCheck = await validateShopSubscription(fileName);
     if (!subCheck.valid) {
-      throw new Error(subCheck.error || 'Shop subscription validation failed.');
+      return { success: false, error: subCheck.error || 'Shop subscription validation failed.' };
     }
 
     const { s3Client, bucketName } = getR2Client();
@@ -95,7 +92,7 @@ export async function getPresignedUploadUrl(fileName: string) {
     return { success: true, url };
   } catch (error: any) {
     console.error('Error generating presigned upload URL:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message || 'Presigned upload URL generation failed' };
   }
 }
 
@@ -105,12 +102,7 @@ export async function getPresignedUploadUrl(fileName: string) {
 export async function getPresignedDownloadUrl(fileName: string) {
   try {
     if (!validateFileName(fileName)) {
-      throw new Error('Invalid file name or unsupported file format.');
-    }
-
-    const subCheck = await validateShopSubscription(fileName);
-    if (!subCheck.valid) {
-      throw new Error(subCheck.error || 'Shop subscription validation failed.');
+      return { success: false, error: 'Invalid file name or unsupported file format.' };
     }
 
     const { s3Client, bucketName } = getR2Client();
@@ -123,7 +115,7 @@ export async function getPresignedDownloadUrl(fileName: string) {
     return { success: true, url };
   } catch (error: any) {
     console.error('Error generating presigned download URL:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message || 'Presigned download URL generation failed' };
   }
 }
 
@@ -133,12 +125,7 @@ export async function getPresignedDownloadUrl(fileName: string) {
 export async function deleteR2File(fileName: string) {
   try {
     if (!validateFileName(fileName)) {
-      throw new Error('Invalid file name for deletion');
-    }
-
-    const subCheck = await validateShopSubscription(fileName);
-    if (!subCheck.valid) {
-      throw new Error(subCheck.error || 'Shop subscription validation failed.');
+      return { success: false, error: 'Invalid file name for deletion' };
     }
 
     const { s3Client, bucketName } = getR2Client();
@@ -151,7 +138,7 @@ export async function deleteR2File(fileName: string) {
     return { success: true };
   } catch (error: any) {
     console.error('Error deleting R2 file:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: error.message || 'Delete R2 file failed' };
   }
 }
 

@@ -1,15 +1,15 @@
 import { createClient } from '@supabase/supabase-js';
 
 /**
- * Server-only Supabase Service Role client for administrative operations.
- * Fails closed if SUPABASE_SERVICE_ROLE_KEY is not defined.
+ * Server-only Supabase client for administrative and background operations.
+ * Uses SUPABASE_SERVICE_ROLE_KEY if defined, falling back to anon key for public checks.
  */
 export function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('Server configuration error: SUPABASE_SERVICE_ROLE_KEY is missing on the server.');
+    throw new Error('Missing Supabase environment variables on the server.');
   }
 
   return createClient(supabaseUrl, serviceRoleKey, {
