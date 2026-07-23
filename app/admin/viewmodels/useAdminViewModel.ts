@@ -90,12 +90,11 @@ export function useAdminViewModel() {
     const cleanInputEmail = adminEmail.trim().toLowerCase();
     const cleanInputPassword = adminPassword.trim();
 
-    const envEmail = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').trim().toLowerCase();
-    const envPassword = (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || '').trim();
-
-    // 1. Authenticate against environment variables (.env.local)
-    if (envEmail && envPassword) {
-      if (cleanInputEmail === envEmail && cleanInputPassword === envPassword) {
+    // 1. Authenticate securely via Server Action
+    try {
+      const { verifyAdminCredentials } = await import('@/lib/adminAuth');
+      const authResult = await verifyAdminCredentials(cleanInputEmail, cleanInputPassword);
+      if (authResult.success) {
         localStorage.setItem('printdedo_admin_auth', 'true');
         setIsAdminAuthenticated(true);
         fetchShops();
@@ -103,7 +102,10 @@ export function useAdminViewModel() {
         fetchAdminMessages();
         return;
       }
+    } catch (err) {
+      console.warn('Server auth action error:', err);
     }
+
 
     // 2. Try Supabase Auth
     try {
