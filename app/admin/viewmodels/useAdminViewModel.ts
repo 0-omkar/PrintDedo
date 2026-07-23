@@ -71,14 +71,35 @@ export function useAdminViewModel() {
       const { data: { session }, error } = await supabase.auth.getSession();
       const storedAuth = localStorage.getItem('printdedo_admin_auth');
       
-      if ((session && !error) || storedAuth === 'true') {
+      if (session && !error) {
         setIsAdminAuthenticated(true);
         fetchShops();
         fetchPlans();
         fetchAdminMessages();
-      } else {
-        setIsAdminAuthenticated(false);
+        return;
       }
+
+      if (storedAuth) {
+        try {
+          const parsed = JSON.parse(storedAuth);
+          if (parsed && parsed.email && parsed.password) {
+            const { verifyAdminCredentials } = await import('@/lib/adminAuth');
+            const authResult = await verifyAdminCredentials(parsed.email, parsed.password);
+            if (authResult.success) {
+              setIsAdminAuthenticated(true);
+              fetchShops();
+              fetchPlans();
+              fetchAdminMessages();
+              return;
+            }
+          }
+        } catch (e) {
+          // If storedAuth is not JSON or invalid
+        }
+        localStorage.removeItem('printdedo_admin_auth');
+      }
+
+      setIsAdminAuthenticated(false);
     };
     checkAdminAuth();
   }, []);
@@ -95,7 +116,7 @@ export function useAdminViewModel() {
       const { verifyAdminCredentials } = await import('@/lib/adminAuth');
       const authResult = await verifyAdminCredentials(cleanInputEmail, cleanInputPassword);
       if (authResult.success) {
-        localStorage.setItem('printdedo_admin_auth', 'true');
+        localStorage.setItem('printdedo_admin_auth', JSON.stringify({ email: cleanInputEmail, password: cleanInputPassword }));
         setIsAdminAuthenticated(true);
         fetchShops();
         fetchPlans();
@@ -115,7 +136,7 @@ export function useAdminViewModel() {
       });
 
       if (!error && data?.session) {
-        localStorage.setItem('printdedo_admin_auth', 'true');
+        localStorage.setItem('printdedo_admin_auth', JSON.stringify({ email: cleanInputEmail, password: cleanInputPassword }));
         setIsAdminAuthenticated(true);
         fetchShops();
         fetchPlans();
@@ -174,8 +195,11 @@ export function useAdminViewModel() {
 
   const handleDeleteAdminMessage = async (id: string) => {
     try {
-      await supabase.from('admin_messages').delete().eq('id', id);
-    } catch (e) {}
+      const { deleteAdminMessageServer } = await import('@/lib/adminActions');
+      await deleteAdminMessageServer(id);
+    } catch (e) {
+      try { await supabase.from('admin_messages').delete().eq('id', id); } catch (err) {}
+    }
 
     const updated = adminMessages.filter(m => m.id !== id);
     setAdminMessages(updated);
@@ -206,12 +230,18 @@ export function useAdminViewModel() {
       description: newPlanDesc.trim()
     };
 
-    const { error } = await supabase.from('subscription_plans').insert([newPlanObj]);
-    if (error) {
+    try {
+      const { createSubscriptionPlanServer } = await import('@/lib/adminActions');
+      const res = await createSubscriptionPlanServer(newPlanObj);
+      if (!res.success) {
+        setPlans(prev => [...prev.filter(p => p.id !== newPlanObj.id), newPlanObj]);
+      } else {
+        fetchPlans();
+      }
+    } catch (err) {
       setPlans(prev => [...prev.filter(p => p.id !== newPlanObj.id), newPlanObj]);
-    } else {
-      fetchPlans();
     }
+
     setShowCreatePlan(false);
     setNewPlanId('');
     setNewPlanName('');
@@ -238,12 +268,18 @@ export function useAdminViewModel() {
       description: editPlanDesc.trim()
     };
 
-    const { error } = await supabase.from('subscription_plans').update(updatedObj).eq('id', planId);
-    if (error) {
+    try {
+      const { updateSubscriptionPlanServer } = await import('@/lib/adminActions');
+      const res = await updateSubscriptionPlanServer(planId, updatedObj);
+      if (!res.success) {
+        setPlans(prev => prev.map(p => p.id === planId ? { ...p, ...updatedObj } : p));
+      } else {
+        fetchPlans();
+      }
+    } catch (err) {
       setPlans(prev => prev.map(p => p.id === planId ? { ...p, ...updatedObj } : p));
-    } else {
-      fetchPlans();
     }
+
     setEditingPlanId(null);
     setPlanSaveLoading(false);
   };
@@ -251,11 +287,16 @@ export function useAdminViewModel() {
   const handleDeletePlanConfirm = async () => {
     if (!planToDelete) return;
     setIsDeletingPlan(true);
-    const { error } = await supabase.from('subscription_plans').delete().eq('id', planToDelete.id);
-    if (error) {
+    try {
+      const { deleteSubscriptionPlanServer } = await import('@/lib/adminActions');
+      const res = await deleteSubscriptionPlanServer(planToDelete.id);
+      if (!res.success) {
+        setPlans(prev => prev.filter(p => p.id !== planToDelete.id));
+      } else {
+        fetchPlans();
+      }
+    } catch (err) {
       setPlans(prev => prev.filter(p => p.id !== planToDelete.id));
-    } else {
-      fetchPlans();
     }
     setIsDeletingPlan(false);
     setPlanToDelete(null);
@@ -474,24 +515,35 @@ export function useAdminViewModel() {
     const newExpiry = new Date(baseTime);
     newExpiry.setMonth(newExpiry.getMonth() + addMonths);
 
-    const { error } = await supabase
-      .from('shops')
-      .update({
-        subscription_expires_at: newExpiry.toISOString(),
-        subscription_plan_name: planName
-      })
-      .eq('id', activeRenewalShop.id);
+    let serverSuccess = false;
+    try {
+      const { renewShopSubscriptionServer } = await import('@/lib/adminActions');
+      const res = await renewShopSubscriptionServer(activeRenewalShop.id, newExpiry.toISOString(), planName);
+      if (res.success) serverSuccess = true;
+    } catch (e) {}
 
-    if (!error) {
-      setShops(prev => prev.map(s => s.id === activeRenewalShop.id ? {
-        ...s,
-        subscription_expires_at: newExpiry.toISOString(),
-        subscription_plan_name: planName
-      } : s));
-      setActiveRenewalShop(null);
-    } else {
-      alert('Failed to update subscription');
+    if (!serverSuccess) {
+      const { error } = await supabase
+        .from('shops')
+        .update({
+          subscription_expires_at: newExpiry.toISOString(),
+          subscription_plan_name: planName
+        })
+        .eq('id', activeRenewalShop.id);
+
+      if (error) {
+        alert('Failed to update subscription');
+        setIsRenewing(false);
+        return;
+      }
     }
+
+    setShops(prev => prev.map(s => s.id === activeRenewalShop.id ? {
+      ...s,
+      subscription_expires_at: newExpiry.toISOString(),
+      subscription_plan_name: planName
+    } : s));
+    setActiveRenewalShop(null);
     setIsRenewing(false);
   };
 
@@ -585,8 +637,11 @@ export function useAdminViewModel() {
 
   const handleDeletePlatformReview = async (id: string) => {
     try {
-      await supabase.from('platform_reviews').delete().eq('id', id);
-    } catch (e) {}
+      const { deletePlatformReviewServer } = await import('@/lib/adminActions');
+      await deletePlatformReviewServer(id);
+    } catch (e) {
+      try { await supabase.from('platform_reviews').delete().eq('id', id); } catch (err) {}
+    }
 
     const updated = platformReviews.filter(r => r.id !== id);
     setPlatformReviews(updated);
@@ -597,8 +652,11 @@ export function useAdminViewModel() {
 
   const handleReplyPlatformReview = async (id: string, reply: string) => {
     try {
-      await supabase.from('platform_reviews').update({ reply }).eq('id', id);
-    } catch (e) {}
+      const { replyPlatformReviewServer } = await import('@/lib/adminActions');
+      await replyPlatformReviewServer(id, reply);
+    } catch (e) {
+      try { await supabase.from('platform_reviews').update({ reply }).eq('id', id); } catch (err) {}
+    }
 
     const updated = platformReviews.map(r => r.id === id ? { ...r, reply } : r);
     setPlatformReviews(updated);

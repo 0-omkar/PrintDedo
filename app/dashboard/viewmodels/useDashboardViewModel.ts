@@ -82,7 +82,9 @@ export function useDashboardViewModel() {
   const formatFilename = (filePath: string) => {
     if (!filePath) return 'Document.pdf';
     const filename = filePath.split('/').pop() || filePath;
-    return filename.replace(/^\d+_[a-z0-9]+_/i, '');
+    // Strip timestamp prefix (e.g. 1721723849_x9k2m_OriginalName.pdf -> OriginalName.pdf)
+    const cleaned = filename.replace(/^\d+_[a-z0-9]+_/i, '');
+    return cleaned || filename;
   };
 
   const getSubscriptionAlert = () => {

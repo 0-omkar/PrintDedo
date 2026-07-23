@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { CheckCircle, Printer, X } from 'lucide-react';
 import { RecentOrder } from '../types';
 
@@ -16,6 +17,17 @@ export const RecentOrdersModal = ({
   formatFilename,
   handlePrint,
 }: RecentOrdersModalProps) => {
+  const [now, setNow] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setNow(Date.now());
+    const interval = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
@@ -49,7 +61,7 @@ export const RecentOrdersModal = ({
             </div>
           ) : (
             recentOrders.map(({ order, completedAt }) => {
-              const elapsed = Date.now() - completedAt;
+              const elapsed = now - completedAt;
               const remainingMs = Math.max(0, (3 * 60 * 1000) - elapsed);
               const totalSec = Math.floor(remainingMs / 1000);
               const m = Math.floor(totalSec / 60);

@@ -290,8 +290,8 @@ export function useShopDropBoxViewModel(shopId: string) {
 
     try {
       for (const doc of docsToUpload) {
-        const fileExt = doc.file.name.split('.').pop();
-        const fileName = `${shopId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
+        const sanitizedOriginalName = doc.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const fileName = `${shopId}/${Date.now()}_${Math.random().toString(36).substring(7)}_${sanitizedOriginalName}`;
 
         let uploadedSuccessfully = false;
 

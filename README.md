@@ -72,8 +72,8 @@ Create a `.env.local` file in the root directory and configure the following var
 ```env
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-NEXT_PUBLIC_ADMIN_EMAIL=admin@printdedo.com
-NEXT_PUBLIC_ADMIN_PASSWORD=your_admin_password
+ADMIN_EMAIL=admin@printdedo.com
+ADMIN_PASSWORD=your_admin_password
 ```
 
 ### 4. Database Setup

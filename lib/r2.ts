@@ -26,19 +26,28 @@ function getR2Client() {
   return { s3Client, bucketName };
 }
 
+function validateFileName(fileName: string): boolean {
+  if (!fileName || typeof fileName !== 'string') return false;
+  if (fileName.includes('..') || fileName.startsWith('/') || fileName.includes('\\')) return false;
+  // Ensure valid PDF extension
+  const cleanName = fileName.trim().toLowerCase();
+  return cleanName.endsWith('.pdf');
+}
+
 /**
  * Generates a presigned URL allowing the customer browser to upload a PDF directly to Cloudflare R2
  */
 export async function getPresignedUploadUrl(fileName: string) {
   try {
-    if (!fileName || fileName.includes('..')) {
-      throw new Error('Invalid file name for upload');
+    if (!validateFileName(fileName)) {
+      throw new Error('Invalid file name or unsupported file format. Only PDF files are allowed.');
     }
 
     const { s3Client, bucketName } = getR2Client();
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: fileName,
+      ContentType: 'application/pdf',
     });
 
     const url = await getSignedUrl(s3Client, command, { expiresIn: 600 });
@@ -54,8 +63,8 @@ export async function getPresignedUploadUrl(fileName: string) {
  */
 export async function getPresignedDownloadUrl(fileName: string) {
   try {
-    if (!fileName || fileName.includes('..')) {
-      throw new Error('Invalid file name for download');
+    if (!validateFileName(fileName)) {
+      throw new Error('Invalid file name or unsupported file format.');
     }
 
     const { s3Client, bucketName } = getR2Client();
@@ -77,7 +86,7 @@ export async function getPresignedDownloadUrl(fileName: string) {
  */
 export async function deleteR2File(fileName: string) {
   try {
-    if (!fileName || fileName.includes('..')) {
+    if (!validateFileName(fileName)) {
       throw new Error('Invalid file name for deletion');
     }
 
@@ -108,6 +117,16 @@ export async function uploadR2Direct(formData: FormData) {
       return { success: false, error: 'Missing file or file name for upload' };
     }
 
+    if (!validateFileName(fileName)) {
+      return { success: false, error: 'Invalid file format or name. Only PDF files are allowed.' };
+    }
+
+    // Server-side max file size limit: 50MB
+    const MAX_FILE_SIZE = 50 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      return { success: false, error: 'File size exceeds the 50MB limit.' };
+    }
+
     const { s3Client, bucketName } = getR2Client();
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
@@ -116,7 +135,7 @@ export async function uploadR2Direct(formData: FormData) {
       Bucket: bucketName,
       Key: fileName,
       Body: buffer,
-      ContentType: file.type || 'application/pdf',
+      ContentType: 'application/pdf',
     });
 
     await s3Client.send(command);

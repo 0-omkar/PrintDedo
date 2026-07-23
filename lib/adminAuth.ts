@@ -8,8 +8,12 @@ export async function verifyAdminCredentials(emailInput: string, passwordInput: 
   const cleanInputEmail = (emailInput || '').trim().toLowerCase();
   const cleanInputPassword = (passwordInput || '').trim();
 
-  const envEmail = (process.env.ADMIN_EMAIL || process.env.NEXT_PUBLIC_ADMIN_EMAIL || 'omkarvarpe.work@gmail.com').trim().toLowerCase();
-  const envPassword = (process.env.ADMIN_PASSWORD || process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'Omkar@910').trim();
+  const envEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+  const envPassword = (process.env.ADMIN_PASSWORD || '').trim();
+
+  if (!envEmail || !envPassword) {
+    return { success: false, error: 'Admin authentication is not configured on the server.' };
+  }
 
   if (cleanInputEmail === envEmail && cleanInputPassword === envPassword) {
     return { success: true };
