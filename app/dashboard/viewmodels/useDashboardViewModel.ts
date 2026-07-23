@@ -511,6 +511,7 @@ export function useDashboardViewModel() {
       });
 
       if (userId) {
+        fetchOrders(userId);
         supabase
           .from('orders')
           .delete()
@@ -519,7 +520,7 @@ export function useDashboardViewModel() {
           .lt('created_at', new Date(tenMinutesAgo).toISOString())
           .then(() => {}, () => {});
       }
-    }, 5000);
+    }, 3000);
 
     
     return () => clearInterval(interval);

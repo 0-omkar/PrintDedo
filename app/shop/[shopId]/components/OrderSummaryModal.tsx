@@ -1,4 +1,4 @@
-import { FileText, X } from 'lucide-react';
+import { FileText, X, Loader2 } from 'lucide-react';
 import { AttachedDoc, Addon } from '../types';
 
 interface OrderSummaryModalProps {
@@ -75,9 +75,20 @@ export const OrderSummaryModal = ({
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl w-full max-w-md text-left space-y-4 animate-scale-in relative max-h-[90vh] overflow-y-auto">
+        {uploading && (
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center rounded-3xl z-30 space-y-3 p-6 text-center">
+            <Loader2 className="w-12 h-12 text-yellow-500 animate-spin" />
+            <div>
+              <p className="text-base font-black text-slate-950 uppercase tracking-tight">Uploading Document...</p>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Sending file to Cloudflare R2 & Shop Queue</p>
+            </div>
+          </div>
+        )}
+
         <button 
           onClick={onClose}
-          className="absolute right-5 top-5 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition border-none bg-transparent cursor-pointer"
+          disabled={uploading}
+          className="absolute right-5 top-5 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition border-none bg-transparent cursor-pointer disabled:opacity-50"
         >
           <X className="w-5 h-5" />
         </button>
