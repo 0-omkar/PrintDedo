@@ -3,12 +3,17 @@
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
+const ACCOUNT_ID = process.env.R2_ACCOUNT_ID || 'e9b3362de1c747908244b583284c2349';
+const ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID || '42c64dad53e752293b838e2137926792';
+const SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY || '785cccee4331e03e56ee8b38fd4fc53d09de92a74d1790a8d9c1ada6882e3083';
+const BUCKET_NAME = process.env.R2_BUCKET_NAME || 'printdedo-r2';
+
 const s3Client = new S3Client({
   region: 'auto',
-  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  endpoint: `https://${ACCOUNT_ID}.r2.cloudflarestorage.com`,
   credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || '',
+    accessKeyId: ACCESS_KEY_ID,
+    secretAccessKey: SECRET_ACCESS_KEY,
   },
 });
 
@@ -18,7 +23,7 @@ const s3Client = new S3Client({
 export async function getPresignedUploadUrl(fileName: string, contentType: string = 'application/pdf') {
   try {
     const command = new PutObjectCommand({
-      Bucket: process.env.R2_BUCKET_NAME,
+      Bucket: BUCKET_NAME,
       Key: fileName,
       ContentType: contentType,
     });
@@ -37,7 +42,7 @@ export async function getPresignedUploadUrl(fileName: string, contentType: strin
 export async function getPresignedDownloadUrl(fileName: string) {
   try {
     const command = new GetObjectCommand({
-      Bucket: process.env.R2_BUCKET_NAME,
+      Bucket: BUCKET_NAME,
       Key: fileName,
     });
 
@@ -55,7 +60,7 @@ export async function getPresignedDownloadUrl(fileName: string) {
 export async function deleteR2File(fileName: string) {
   try {
     const command = new DeleteObjectCommand({
-      Bucket: process.env.R2_BUCKET_NAME,
+      Bucket: BUCKET_NAME,
       Key: fileName,
     });
 
