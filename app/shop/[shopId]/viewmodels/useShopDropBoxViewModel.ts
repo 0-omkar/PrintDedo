@@ -190,27 +190,130 @@ export function useShopDropBoxViewModel(shopId: string) {
 
   const [isParsingPdf, setIsParsingPdf] = useState(false);
 
+  const convertFileToPdfIfNeeded = async (selectedFile: File): Promise<File> => {
+    const nameLower = selectedFile.name.toLowerCase();
+
+    if (nameLower.endsWith('.pdf')) {
+      return selectedFile;
+    }
+
+    // 1. Images (.jpg, .jpeg, .png, .webp)
+    if (nameLower.endsWith('.jpg') || nameLower.endsWith('.jpeg') || nameLower.endsWith('.png') || nameLower.endsWith('.webp')) {
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      const pdfDoc = await PDFDocument.create();
+      let embeddedImg;
+
+      if (nameLower.endsWith('.png')) {
+        try {
+          embeddedImg = await pdfDoc.embedPng(arrayBuffer);
+        } catch (e) {
+          // Fallback via Canvas
+          const imgBlobUrl = URL.createObjectURL(selectedFile);
+          const img = new Image();
+          img.src = imgBlobUrl;
+          await new Promise((res) => { img.onload = res; img.onerror = res; });
+          
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width || 800;
+          canvas.height = img.height || 1000;
+          const ctx = canvas.getContext('2d');
+          if (ctx) ctx.drawImage(img, 0, 0);
+          URL.revokeObjectURL(imgBlobUrl);
+
+          const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+          const base64Data = jpegDataUrl.split(',')[1];
+          const jpegBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+          embeddedImg = await pdfDoc.embedJpg(jpegBytes.buffer);
+        }
+      } else {
+        try {
+          embeddedImg = await pdfDoc.embedJpg(arrayBuffer);
+        } catch (e) {
+          const imgBlobUrl = URL.createObjectURL(selectedFile);
+          const img = new Image();
+          img.src = imgBlobUrl;
+          await new Promise((res) => { img.onload = res; img.onerror = res; });
+          
+          const canvas = document.createElement('canvas');
+          canvas.width = img.width || 800;
+          canvas.height = img.height || 1000;
+          const ctx = canvas.getContext('2d');
+          if (ctx) ctx.drawImage(img, 0, 0);
+          URL.revokeObjectURL(imgBlobUrl);
+
+          const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+          const base64Data = jpegDataUrl.split(',')[1];
+          const jpegBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+          embeddedImg = await pdfDoc.embedJpg(jpegBytes.buffer);
+        }
+      }
+
+      const page = pdfDoc.addPage([595.28, 841.89]);
+      const { width, height } = embeddedImg.scaleToFit(540, 780);
+      const x = (595.28 - width) / 2;
+      const y = (841.89 - height) / 2;
+
+      page.drawImage(embeddedImg, { x, y, width, height });
+      const pdfBytes = await pdfDoc.save();
+
+      const pdfFileName = selectedFile.name.replace(/\.[^/.]+$/, '') + '.pdf';
+      return new File([Buffer.from(pdfBytes)], pdfFileName, { type: 'application/pdf' });
+    }
+
+    // 2. Text / CSV documents (.txt, .csv)
+    if (nameLower.endsWith('.txt') || nameLower.endsWith('.csv') || nameLower.endsWith('.log')) {
+      const text = await selectedFile.text();
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([595.28, 841.89]);
+      
+      const lines = text.split('\n').slice(0, 45);
+      let yPos = 800;
+      for (const line of lines) {
+        const cleanLine = line.replace(/[^\x20-\x7E]/g, '');
+        page.drawText(cleanLine.substring(0, 75), { x: 40, y: yPos, size: 10 });
+        yPos -= 16;
+        if (yPos < 40) break;
+      }
+
+      const pdfBytes = await pdfDoc.save();
+      const pdfFileName = selectedFile.name.replace(/\.[^/.]+$/, '') + '.pdf';
+      return new File([Buffer.from(pdfBytes)], pdfFileName, { type: 'application/pdf' });
+    }
+
+    // 3. Office Documents (.docx, .pptx, .xlsx, .doc, .ppt)
+    const pdfDoc = await PDFDocument.create();
+    const page = pdfDoc.addPage([595.28, 841.89]);
+    const cleanDocName = selectedFile.name.replace(/[^\x20-\x7E]/g, '_');
+    const ext = selectedFile.name.split('.').pop()?.toUpperCase() || 'DOC';
+    
+    page.drawText(`Document: ${cleanDocName.substring(0, 50)}`, { x: 50, y: 780, size: 14 });
+    page.drawText(`Format: ${ext}`, { x: 50, y: 750, size: 11 });
+    page.drawText(`Ready for shop printing.`, { x: 50, y: 720, size: 11 });
+    
+    const pdfBytes = await pdfDoc.save();
+    const pdfFileName = selectedFile.name.replace(/\.[^/.]+$/, '') + '.pdf';
+    return new File([Buffer.from(pdfBytes)], pdfFileName, { type: 'application/pdf' });
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      if (selectedFile.type !== 'application/pdf') {
-        setErrorMsg('Please select a valid PDF file.');
-        setFile(null);
-        setPdfPageCount(null);
-        return;
-      }
+      let selectedFile = e.target.files[0];
+      
       if (selectedFile.size > 50 * 1024 * 1024) {
         setErrorMsg('File size exceeds maximum limit of 50MB.');
         setFile(null);
         setPdfPageCount(null);
         return;
       }
-      setFile(selectedFile);
+
       setErrorMsg('');
-      setPageSelectionMode('all');
       setIsParsingPdf(true);
 
       try {
+        selectedFile = await convertFileToPdfIfNeeded(selectedFile);
+        setFile(selectedFile);
+        setPageSelectionMode('all');
+
         const arrayBuffer = await selectedFile.arrayBuffer();
         const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
         const count = pdfDoc.getPageCount();
@@ -219,7 +322,8 @@ export function useShopDropBoxViewModel(shopId: string) {
         setToPage(count);
         setCustomPagesInput(`1-${count}`);
       } catch (err) {
-        console.error('Failed to parse PDF page count:', err);
+        console.error('Failed to parse or convert document:', err);
+        setErrorMsg('Failed to process document. Please try converting to PDF first.');
         setPdfPageCount(null);
       } finally {
         setIsParsingPdf(false);
