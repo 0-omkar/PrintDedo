@@ -53,12 +53,13 @@ export function useShopDropBoxViewModel(shopId: string) {
   useEffect(() => {
     // Log the user in anonymously if they aren't already, so they bypass upload RLS
     const initAnonAuth = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (error || !session) {
-        if (error) {
-          await supabase.auth.signOut().catch(() => {});
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          await supabase.auth.signInAnonymously().catch(() => {});
         }
-        await supabase.auth.signInAnonymously().catch(() => {});
+      } catch (e) {
+        // Ignore anonymous auth exceptions
       }
     };
     initAnonAuth();
@@ -361,7 +362,10 @@ export function useShopDropBoxViewModel(shopId: string) {
             created_at: new Date().toISOString()
           });
 
-        if (dbError) throw dbError;
+        if (dbError) {
+          console.error('Supabase DB Insert Error:', dbError);
+          throw new Error(dbError.message || 'Failed to save order to database.');
+        }
 
         // Log upload for storage usage metrics
         if (typeof window !== 'undefined') {
