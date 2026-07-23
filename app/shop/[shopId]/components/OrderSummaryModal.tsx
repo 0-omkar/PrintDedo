@@ -75,16 +75,6 @@ export const OrderSummaryModal = ({
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
       <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl w-full max-w-md text-left space-y-4 animate-scale-in relative max-h-[90vh] overflow-y-auto">
-        {uploading && (
-          <div className="absolute inset-0 bg-white/95 backdrop-blur-xs flex flex-col items-center justify-center rounded-3xl z-30 space-y-3 p-6 text-center">
-            <Loader2 className="w-12 h-12 text-yellow-500 animate-spin" />
-            <div>
-              <p className="text-base font-black text-slate-950 uppercase tracking-tight">Uploading Document...</p>
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-1">Sending file to Cloudflare R2 & Shop Queue</p>
-            </div>
-          </div>
-        )}
-
         <button 
           onClick={onClose}
           disabled={uploading}

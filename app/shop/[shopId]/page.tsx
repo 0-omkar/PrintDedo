@@ -127,26 +127,17 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
               type="file" 
               accept=".pdf"
               onChange={vm.handleFileChange}
-              disabled={vm.isParsingPdf || vm.uploading}
+              disabled={vm.uploading}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
             />
             
-            {vm.isParsingPdf ? (
-              <div className="flex flex-col items-center justify-center py-2 space-y-2">
-                <Loader2 className="w-8 h-8 text-yellow-500 animate-spin" />
-                <p className="text-xs font-bold text-slate-700">Detecting PDF Pages...</p>
-              </div>
-            ) : (
-              <>
-                <FileText className="w-10 h-10 text-yellow-500 mx-auto mb-2" />
-                <p className="text-sm font-bold text-slate-700">
-                  {vm.file ? vm.file.name : (vm.attachedDocs.length > 0 ? 'Attach Another PDF Document' : 'Click to Upload PDF Document')}
-                </p>
-                <p className="text-xs text-slate-400 mt-1">PDF files only (Max 50MB)</p>
-              </>
-            )}
+            <FileText className="w-10 h-10 text-yellow-500 mx-auto mb-2" />
+            <p className="text-sm font-bold text-slate-700">
+              {vm.file ? vm.file.name : (vm.attachedDocs.length > 0 ? 'Attach Another PDF Document' : 'Click to Upload PDF Document')}
+            </p>
+            <p className="text-xs text-slate-400 mt-1">PDF files only (Max 50MB)</p>
 
-            {vm.pdfPageCount !== null && !vm.isParsingPdf && (
+            {vm.pdfPageCount !== null && (
               <div className="mt-2 inline-flex items-center space-x-1.5 bg-yellow-100/80 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200 animate-fade-in">
                 <span>📄 {vm.pdfPageCount} {vm.pdfPageCount === 1 ? 'Page' : 'Pages'} Detected</span>
               </div>
@@ -353,14 +344,36 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
             disabled={vm.totalBatchDocsCount === 0 || vm.uploading || !vm.name}
             className="w-full bg-yellow-400 text-black font-bold py-3.5 rounded-xl hover:bg-yellow-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex justify-between items-center px-6 mt-2 cursor-pointer shadow-sm border-none"
           >
-            <span>Review Order</span>
-            {!vm.uploading && (
-              <span className="bg-black/10 px-3 py-1 rounded-lg text-sm font-bold">
-                ₹{vm.grandTotalCost.toFixed(2)}
-              </span>
+            {vm.uploading ? (
+              <div className="flex items-center space-x-2 mx-auto">
+                <Loader2 className="w-5 h-5 text-black animate-spin" />
+                <span className="font-extrabold uppercase text-xs tracking-wider">Uploading Document...</span>
+              </div>
+            ) : (
+              <>
+                <span>Review Order</span>
+                <span className="bg-black/10 px-3 py-1 rounded-lg text-sm font-bold">
+                  ₹{vm.grandTotalCost.toFixed(2)}
+                </span>
+              </>
             )}
           </button>
         </form>
+
+        {/* Screen Loader Overlay during document upload */}
+        {vm.uploading && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-8 shadow-2xl flex flex-col items-center text-center space-y-4 max-w-xs border border-slate-100 animate-scale-in">
+              <div className="w-16 h-16 rounded-2xl bg-yellow-100 flex items-center justify-center text-yellow-600 shadow-inner">
+                <Loader2 className="w-9 h-9 animate-spin" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-950 uppercase tracking-tight">Sending to Shop Queue...</h3>
+                <p className="text-xs text-slate-500 font-semibold mt-1">Please wait while your document is uploaded.</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <OrderSummaryModal
           isOpen={vm.isSummaryModalOpen}
