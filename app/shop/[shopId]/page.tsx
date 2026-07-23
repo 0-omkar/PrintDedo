@@ -1,7 +1,7 @@
 'use client';
 import { use } from 'react';
 import Link from 'next/link';
-import { FileText, Plus, Trash2 } from 'lucide-react';
+import { FileText, Plus, Trash2, Loader2 } from 'lucide-react';
 import { XeroxLogoSVG } from '@/components/XeroxLogoSVG';
 import { BackgroundDecorations } from '@/components/BackgroundDecorations';
 import { SuccessScreen } from './components/SuccessScreen';
@@ -127,15 +127,26 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
               type="file" 
               accept=".pdf"
               onChange={vm.handleFileChange}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              disabled={vm.isParsingPdf || vm.uploading}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
             />
             
-            <FileText className="w-10 h-10 text-yellow-500 mx-auto mb-2" />
-            <p className="text-sm font-bold text-slate-700">
-              {vm.file ? vm.file.name : (vm.attachedDocs.length > 0 ? 'Attach Another PDF Document' : 'Click to Upload PDF Document')}
-            </p>
-            <p className="text-xs text-slate-400 mt-1">PDF files only (Max 20MB)</p>
-            {vm.pdfPageCount !== null && (
+            {vm.isParsingPdf ? (
+              <div className="flex flex-col items-center justify-center py-2 space-y-2">
+                <Loader2 className="w-8 h-8 text-yellow-500 animate-spin" />
+                <p className="text-xs font-bold text-slate-700">Detecting PDF Pages...</p>
+              </div>
+            ) : (
+              <>
+                <FileText className="w-10 h-10 text-yellow-500 mx-auto mb-2" />
+                <p className="text-sm font-bold text-slate-700">
+                  {vm.file ? vm.file.name : (vm.attachedDocs.length > 0 ? 'Attach Another PDF Document' : 'Click to Upload PDF Document')}
+                </p>
+                <p className="text-xs text-slate-400 mt-1">PDF files only (Max 50MB)</p>
+              </>
+            )}
+
+            {vm.pdfPageCount !== null && !vm.isParsingPdf && (
               <div className="mt-2 inline-flex items-center space-x-1.5 bg-yellow-100/80 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200 animate-fade-in">
                 <span>📄 {vm.pdfPageCount} {vm.pdfPageCount === 1 ? 'Page' : 'Pages'} Detected</span>
               </div>

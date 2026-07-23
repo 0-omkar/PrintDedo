@@ -188,6 +188,8 @@ export function useShopDropBoxViewModel(shopId: string) {
   const attachedTotalCost = attachedDocs.reduce((sum, doc) => sum + doc.itemCost, 0);
   const grandTotalCost = attachedTotalCost + currentDocCost;
 
+  const [isParsingPdf, setIsParsingPdf] = useState(false);
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
@@ -206,6 +208,7 @@ export function useShopDropBoxViewModel(shopId: string) {
       setFile(selectedFile);
       setErrorMsg('');
       setPageSelectionMode('all');
+      setIsParsingPdf(true);
 
       try {
         const arrayBuffer = await selectedFile.arrayBuffer();
@@ -218,6 +221,8 @@ export function useShopDropBoxViewModel(shopId: string) {
       } catch (err) {
         console.error('Failed to parse PDF page count:', err);
         setPdfPageCount(null);
+      } finally {
+        setIsParsingPdf(false);
       }
     }
   };
@@ -529,6 +534,7 @@ export function useShopDropBoxViewModel(shopId: string) {
     grandTotalCost,
     totalBatchDocsCount,
     isSubscriptionExpired,
+    isParsingPdf,
     // Handlers
     handleFileChange,
     handleAttachAnother,
