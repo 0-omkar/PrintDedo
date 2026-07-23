@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CheckCircle, MapPin, Printer, Shield, Star } from 'lucide-react';
+import { CheckCircle, MapPin, Printer, Shield, Star, Download } from 'lucide-react';
 import { XeroxLogoSVG } from '@/components/XeroxLogoSVG';
 
 interface LiveOrdersQueueProps {
@@ -254,6 +254,8 @@ export const LiveOrdersQueue = ({
               }
             }
 
+            const isRawOfficeDoc = (order.file_path || '').toLowerCase().match(/\.(pptx|ppt|docx|doc|xlsx|xls)$/i);
+
             return (
               <div key={order.id} className="bg-white border border-slate-200 rounded-2xl p-5 md:p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 hover:shadow-md transition-shadow">
                 
@@ -307,8 +309,8 @@ export const LiveOrdersQueue = ({
                     onClick={() => handlePrint(order)}
                     className="flex items-center space-x-2 bg-yellow-400 text-black px-6 py-3 rounded-xl font-bold hover:bg-yellow-500 transition-colors shadow-sm cursor-pointer border-none text-sm md:text-base"
                   >
-                    <Printer className="w-5 h-5" />
-                    <span>Print Now</span>
+                    {isRawOfficeDoc ? <Download className="w-5 h-5" /> : <Printer className="w-5 h-5" />}
+                    <span>{isRawOfficeDoc ? 'Download & Print' : 'Print Now'}</span>
                   </button>
                 </div>
 

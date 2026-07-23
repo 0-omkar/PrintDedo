@@ -125,7 +125,7 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
           <div className="relative border-2 border-dashed border-slate-200 rounded-xl p-6 text-center hover:border-yellow-400 transition-colors bg-slate-50/50">
             <input 
               type="file" 
-              accept=".pdf,.png,.jpg,.jpeg,.webp,.txt"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.pptx,.xlsx,.doc,.ppt,.txt,.csv"
               onChange={vm.handleFileChange}
               disabled={vm.uploading}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
@@ -133,19 +133,54 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
             
             <FileText className="w-10 h-10 text-yellow-500 mx-auto mb-2" />
             <p className="text-sm font-bold text-slate-700">
-              {vm.file ? vm.file.name : (vm.attachedDocs.length > 0 ? 'Attach Another File' : 'Click to Upload Document or Image')}
+              {vm.file ? vm.file.name : (vm.attachedDocs.length > 0 ? 'Attach Another Document / Image' : 'Click to Upload Document / Image')}
             </p>
-            <p className="text-xs text-slate-400 mt-1">PDF, Images & Text (.pdf, .jpg, .png, .webp, .txt)</p>
+            <p className="text-xs text-slate-400 mt-1">PDF, Word, PPT, Excel, Images (Max 50MB)</p>
 
-            {vm.pdfPageCount !== null && (
+            {vm.file && (
               <div className="mt-2 inline-flex items-center space-x-1.5 bg-yellow-100/80 text-yellow-800 px-3 py-1 rounded-full text-xs font-bold border border-yellow-200 animate-fade-in">
-                <span>📄 {vm.pdfPageCount} {vm.pdfPageCount === 1 ? 'Page' : 'Pages'} Detected</span>
+                {vm.isRawOfficeDoc ? (
+                  <span>📄 {vm.pdfPageCount || 1} {vm.file.name.toLowerCase().endsWith('.pptx') || vm.file.name.toLowerCase().endsWith('.ppt') ? 'Slides' : 'Pages'} Detected ({vm.file.name.split('.').pop()?.toUpperCase()})</span>
+                ) : (
+                  <span>📄 {vm.pdfPageCount || 1} {vm.pdfPageCount === 1 ? 'Page' : 'Pages'} Detected</span>
+                )}
               </div>
             )}
           </div>
 
-          {/* Page Selection Controls */}
-          {vm.file && (
+          {/* Office Document Slide / Page Count Control */}
+          {vm.file && vm.isRawOfficeDoc && (
+            <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                  Total {vm.file.name.toLowerCase().endsWith('.pptx') || vm.file.name.toLowerCase().endsWith('.ppt') ? 'Slides' : 'Pages'} to Print
+                </span>
+                <span className="text-xs font-extrabold text-slate-900 bg-yellow-300/80 px-2 py-0.5 rounded border border-yellow-400">
+                  {vm.pdfPageCount || 1} {vm.file.name.toLowerCase().endsWith('.pptx') || vm.file.name.toLowerCase().endsWith('.ppt') ? 'Slides' : 'Pages'}
+                </span>
+              </div>
+              <div className="flex items-center space-x-2 pt-1">
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={vm.pdfPageCount || 1}
+                  onChange={(e) => {
+                    const val = Math.max(1, parseInt(e.target.value) || 1);
+                    vm.setPdfPageCount(val);
+                    vm.setFromPage(1);
+                    vm.setToPage(val);
+                    vm.setCustomPagesInput(`1-${val}`);
+                  }}
+                  className="w-full bg-white border border-slate-300 rounded-xl px-3.5 py-2 text-sm font-bold text-slate-800 outline-none focus:border-yellow-500"
+                />
+              </div>
+              <p className="text-[11px] text-slate-400 font-medium">Auto-detected from document file. You can adjust if needed.</p>
+            </div>
+          )}
+
+          {/* Page Selection Controls (Only for PDF Documents) */}
+          {vm.file && !vm.isRawOfficeDoc && (
             <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-3 animate-in fade-in slide-in-from-bottom-2 duration-200">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">

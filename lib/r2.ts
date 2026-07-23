@@ -30,16 +30,12 @@ function getR2Client() {
 function validateFileName(fileName: string): boolean {
   if (!fileName || typeof fileName !== 'string') return false;
   if (fileName.includes('..') || fileName.startsWith('/') || fileName.includes('\\')) return false;
-  const cleanName = fileName.trim().toLowerCase();
-  if (!cleanName.endsWith('.pdf')) return false;
   const parts = fileName.split('/');
   return parts.length === 2 && parts[0].trim().length > 0 && parts[1].trim().length > 0;
 }
 
 /**
  * Validates shop existence and active subscription on server side.
- * Allows upload if shop is active or if lookup is unavailable.
- * Only blocks if shop subscription is explicitly expired.
  */
 async function validateShopSubscription(fileName: string): Promise<{ valid: boolean; error?: string }> {
   try {
@@ -68,12 +64,12 @@ async function validateShopSubscription(fileName: string): Promise<{ valid: bool
 }
 
 /**
- * Generates a presigned URL allowing customer browser to upload a PDF directly to Cloudflare R2
+ * Generates a presigned URL allowing customer browser to upload a document/image directly to Cloudflare R2
  */
 export async function getPresignedUploadUrl(fileName: string) {
   try {
     if (!validateFileName(fileName)) {
-      return { success: false, error: 'Invalid file name or unsupported file format. Only PDF files are allowed.' };
+      return { success: false, error: 'Invalid file path format.' };
     }
 
     const subCheck = await validateShopSubscription(fileName);
@@ -85,7 +81,6 @@ export async function getPresignedUploadUrl(fileName: string) {
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: fileName,
-      ContentType: 'application/pdf',
     });
 
     const url = await getSignedUrl(s3Client, command, { expiresIn: 600 });
@@ -97,12 +92,12 @@ export async function getPresignedUploadUrl(fileName: string) {
 }
 
 /**
- * Generates a presigned URL allowing shop owner browser to download/print a PDF directly from Cloudflare R2
+ * Generates a presigned URL allowing shop owner browser to download/print a document directly from Cloudflare R2
  */
 export async function getPresignedDownloadUrl(fileName: string) {
   try {
     if (!validateFileName(fileName)) {
-      return { success: false, error: 'Invalid file name or unsupported file format.' };
+      return { success: false, error: 'Invalid file path format.' };
     }
 
     const { s3Client, bucketName } = getR2Client();
@@ -120,7 +115,7 @@ export async function getPresignedDownloadUrl(fileName: string) {
 }
 
 /**
- * Deletes a PDF file from Cloudflare R2
+ * Deletes a file from Cloudflare R2
  */
 export async function deleteR2File(fileName: string) {
   try {
@@ -143,7 +138,7 @@ export async function deleteR2File(fileName: string) {
 }
 
 /**
- * Direct server-side upload to Cloudflare R2 with PDF magic bytes validation
+ * Direct server-side upload to Cloudflare R2
  */
 export async function uploadR2Direct(formData: FormData) {
   try {
@@ -155,7 +150,7 @@ export async function uploadR2Direct(formData: FormData) {
     }
 
     if (!validateFileName(fileName)) {
-      return { success: false, error: 'Invalid file format or name. Only PDF files are allowed.' };
+      return { success: false, error: 'Invalid file format or name.' };
     }
 
     const subCheck = await validateShopSubscription(fileName);
@@ -171,18 +166,11 @@ export async function uploadR2Direct(formData: FormData) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Validate PDF magic bytes (%PDF)
-    const header = buffer.slice(0, 4).toString('utf-8');
-    if (header !== '%PDF') {
-      return { success: false, error: 'Invalid file signature. File is not a valid PDF document.' };
-    }
-
     const { s3Client, bucketName } = getR2Client();
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: fileName,
       Body: buffer,
-      ContentType: 'application/pdf',
     });
 
     await s3Client.send(command);

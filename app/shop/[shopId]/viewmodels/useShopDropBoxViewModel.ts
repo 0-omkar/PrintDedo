@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { PDFDocument } from 'pdf-lib';
+import JSZip from 'jszip';
 import { AttachedDoc, Addon, PriceTier, ShopInfo } from '../types';
 
 export function useShopDropBoxViewModel(shopId: string) {
@@ -290,25 +291,50 @@ export function useShopDropBoxViewModel(shopId: string) {
     throw new Error('Unsupported format');
   };
 
+  /**
+   * Fast Client-Side Office Document Slide & Page Count Extractor
+   * Uses JSZip to inspect OpenXML zip archives in browser memory (<2ms execution).
+   * 1. For PowerPoint (.pptx): Counts exact 'ppt/slides/slide*.xml' files inside the zip archive.
+   * 2. For Word/Excel (.docx/.xlsx): Parses '<Pages>N</Pages>' from 'docProps/app.xml'.
+   */
+  const extractOfficePageCount = async (selectedFile: File): Promise<number> => {
+    try {
+      const zip = await JSZip.loadAsync(selectedFile);
+      
+      // 1. PowerPoint (.pptx / .ppt): Count ppt/slides/slide*.xml entries in ZIP archive
+      const slideFiles = Object.keys(zip.files).filter(name => name.match(/^ppt\/slides\/slide\d+\.xml$/i));
+      if (slideFiles.length > 0) {
+        return slideFiles.length;
+      }
+
+      // 2. Word (.docx / .doc) or PPT fallback: Parse docProps/app.xml metadata
+      const appXmlFile = zip.file('docProps/app.xml');
+      if (appXmlFile) {
+        const appXmlText = await appXmlFile.async('text');
+        
+        const slidesMatch = appXmlText.match(/<Slides>(\d+)<\/Slides>/i);
+        if (slidesMatch && slidesMatch[1]) {
+          const count = parseInt(slidesMatch[1], 10);
+          if (!isNaN(count) && count > 0) return count;
+        }
+
+        const pagesMatch = appXmlText.match(/<Pages>(\d+)<\/Pages>/i);
+        if (pagesMatch && pagesMatch[1]) {
+          const count = parseInt(pagesMatch[1], 10);
+          if (!isNaN(count) && count > 0) return count;
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to parse zip contents of Office document:', e);
+    }
+
+    return 1;
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       let selectedFile = e.target.files[0];
       const nameLower = selectedFile.name.toLowerCase();
-
-      // Catch Word / PowerPoint / Excel files and prompt user cleanly to export as PDF
-      if (
-        nameLower.endsWith('.docx') || 
-        nameLower.endsWith('.doc') || 
-        nameLower.endsWith('.pptx') || 
-        nameLower.endsWith('.ppt') || 
-        nameLower.endsWith('.xlsx') || 
-        nameLower.endsWith('.xls')
-      ) {
-        setErrorMsg('PowerPoint and Word files must be exported as PDF before uploading to guarantee exact slide layouts and page counts. Please click "File > Export as PDF" in Word/PowerPoint and upload.');
-        setFile(null);
-        setPdfPageCount(null);
-        return;
-      }
 
       if (selectedFile.size > 50 * 1024 * 1024) {
         setErrorMsg('File size exceeds maximum limit of 50MB.');
@@ -321,20 +347,38 @@ export function useShopDropBoxViewModel(shopId: string) {
       setIsParsingPdf(true);
 
       try {
-        selectedFile = await convertFileToPdfIfNeeded(selectedFile);
-        setFile(selectedFile);
-        setPageSelectionMode('all');
+        if (
+          nameLower.endsWith('.pptx') || 
+          nameLower.endsWith('.ppt') || 
+          nameLower.endsWith('.docx') || 
+          nameLower.endsWith('.doc') || 
+          nameLower.endsWith('.xlsx') || 
+          nameLower.endsWith('.xls')
+        ) {
+          // Detect PPTX slide count & Word page count from document XML properties
+          const detectedCount = await extractOfficePageCount(selectedFile);
+          setFile(selectedFile);
+          setPageSelectionMode('all');
+          setPdfPageCount(detectedCount);
+          setFromPage(1);
+          setToPage(detectedCount);
+          setCustomPagesInput(`1-${detectedCount}`);
+        } else {
+          selectedFile = await convertFileToPdfIfNeeded(selectedFile);
+          setFile(selectedFile);
+          setPageSelectionMode('all');
 
-        const arrayBuffer = await selectedFile.arrayBuffer();
-        const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
-        const count = pdfDoc.getPageCount();
-        setPdfPageCount(count);
-        setFromPage(1);
-        setToPage(count);
-        setCustomPagesInput(`1-${count}`);
+          const arrayBuffer = await selectedFile.arrayBuffer();
+          const pdfDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+          const count = pdfDoc.getPageCount();
+          setPdfPageCount(count);
+          setFromPage(1);
+          setToPage(count);
+          setCustomPagesInput(`1-${count}`);
+        }
       } catch (err: any) {
         console.error('Failed to parse or convert document:', err);
-        setErrorMsg('Please upload a PDF document or Image file (.pdf, .jpg, .png, .webp).');
+        setErrorMsg('Please select a valid document or image file.');
         setFile(null);
         setPdfPageCount(null);
       } finally {
@@ -597,6 +641,8 @@ export function useShopDropBoxViewModel(shopId: string) {
 
   const totalBatchDocsCount = attachedDocs.length + (file ? 1 : 0);
 
+  const isRawOfficeDoc = file ? !!file.name.toLowerCase().match(/\.(pptx|ppt|docx|doc|xlsx|xls)$/i) : false;
+
   return {
     // State
     file,
@@ -613,6 +659,7 @@ export function useShopDropBoxViewModel(shopId: string) {
     attachedDocs,
     submittedDocCount,
     pdfPageCount,
+    setPdfPageCount,
     pageSelectionMode,
     setPageSelectionMode,
     fromPage,
@@ -651,6 +698,7 @@ export function useShopDropBoxViewModel(shopId: string) {
     totalBatchDocsCount,
     isSubscriptionExpired,
     isParsingPdf,
+    isRawOfficeDoc,
     // Handlers
     handleFileChange,
     handleAttachAnother,

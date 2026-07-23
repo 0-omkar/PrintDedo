@@ -731,6 +731,53 @@ export function useDashboardViewModel() {
         throw new Error(presigned.error || 'Failed to get download URL from Cloudflare R2.');
       }
 
+      const filePathLower = (order.file_path || '').toLowerCase();
+      const isPdf = filePathLower.endsWith('.pdf');
+
+      if (!isPdf) {
+        // Direct browser file download for PowerPoint, Word, Excel, and raw formats
+        const a = document.createElement('a');
+        a.href = presigned.url;
+        a.download = formatFilename(order.file_path);
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        setTimeout(async () => {
+          const didPrint = window.confirm("File downloaded to your computer!\n\nClick OK after printing to mark as completed and move to Recents queue.");
+          if (didPrint) {
+            await supabase
+              .from('orders')
+              .update({ status: 'completed' })
+              .eq('id', order.id);
+
+            setTimeout(async () => {
+              try {
+                await deleteR2File(order.file_path);
+              } catch (e) {
+                console.error('Auto-delete R2 file error:', e);
+              }
+            }, 3 * 60 * 1000);
+
+            const now = Date.now();
+            setRecentOrders(prev => {
+              const updated = [
+                { order, completedAt: now },
+                ...prev.filter(r => r.order.id !== order.id)
+              ];
+              if (userId) {
+                localStorage.setItem(`printdedo_recent_orders_${userId}`, JSON.stringify(updated));
+              }
+              return updated;
+            });
+
+            if (userId) fetchOrders(userId);
+          }
+        }, 500);
+        return;
+      }
+
       const res = await fetch(presigned.url);
       if (!res.ok) throw new Error('Failed to fetch PDF from Cloudflare R2.');
 
@@ -772,7 +819,6 @@ export function useDashboardViewModel() {
                 }
               }, 3 * 60 * 1000); // 3 minutes
 
-
               const now = Date.now();
               setRecentOrders(prev => {
                 const updated = [
@@ -796,7 +842,7 @@ export function useDashboardViewModel() {
       };
     } catch (err) {
       console.error(err);
-      alert('Failed to load PDF for printing.');
+      alert('Failed to load file for printing.');
     }
   };
 
