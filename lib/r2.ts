@@ -2,6 +2,7 @@
 
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { getSupabaseAdmin } from './supabaseServer';
 
 function getR2Client() {
   const accountId = process.env.R2_ACCOUNT_ID;
@@ -29,18 +30,58 @@ function getR2Client() {
 function validateFileName(fileName: string): boolean {
   if (!fileName || typeof fileName !== 'string') return false;
   if (fileName.includes('..') || fileName.startsWith('/') || fileName.includes('\\')) return false;
-  // Ensure valid PDF extension
   const cleanName = fileName.trim().toLowerCase();
-  return cleanName.endsWith('.pdf');
+  if (!cleanName.endsWith('.pdf')) return false;
+  const parts = fileName.split('/');
+  return parts.length === 2 && parts[0].trim().length > 0 && parts[1].trim().length > 0;
 }
 
 /**
- * Generates a presigned URL allowing the customer browser to upload a PDF directly to Cloudflare R2
+ * Validates shop existence and active subscription on server side.
+ * FAILS CLOSED if shop does not exist, subscription is expired, or DB is unreachable.
+ */
+async function validateShopSubscription(fileName: string): Promise<{ valid: boolean; error?: string }> {
+  try {
+    const shopId = fileName.split('/')[0];
+    if (!shopId) return { valid: false, error: 'Invalid shop ID path format' };
+
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: shop, error } = await supabaseAdmin
+      .from('shops')
+      .select('id, subscription_expires_at')
+      .eq('id', shopId)
+      .single();
+
+    if (error || !shop) {
+      return { valid: false, error: 'Shop does not exist or access is forbidden.' };
+    }
+
+    if (shop.subscription_expires_at) {
+      const expires = new Date(shop.subscription_expires_at).getTime();
+      if (expires < Date.now()) {
+        return { valid: false, error: 'Shop subscription is expired.' };
+      }
+    }
+
+    return { valid: true };
+  } catch (err: any) {
+    console.error('Error validating shop subscription:', err);
+    return { valid: false, error: 'Shop validation failure: Unable to verify active shop subscription.' };
+  }
+}
+
+/**
+ * Generates a presigned URL allowing customer browser to upload a PDF directly to Cloudflare R2
  */
 export async function getPresignedUploadUrl(fileName: string) {
   try {
     if (!validateFileName(fileName)) {
       throw new Error('Invalid file name or unsupported file format. Only PDF files are allowed.');
+    }
+
+    const subCheck = await validateShopSubscription(fileName);
+    if (!subCheck.valid) {
+      throw new Error(subCheck.error || 'Shop subscription validation failed.');
     }
 
     const { s3Client, bucketName } = getR2Client();
@@ -59,12 +100,17 @@ export async function getPresignedUploadUrl(fileName: string) {
 }
 
 /**
- * Generates a presigned URL allowing the shop owner browser to download/print a PDF directly from Cloudflare R2
+ * Generates a presigned URL allowing shop owner browser to download/print a PDF directly from Cloudflare R2
  */
 export async function getPresignedDownloadUrl(fileName: string) {
   try {
     if (!validateFileName(fileName)) {
       throw new Error('Invalid file name or unsupported file format.');
+    }
+
+    const subCheck = await validateShopSubscription(fileName);
+    if (!subCheck.valid) {
+      throw new Error(subCheck.error || 'Shop subscription validation failed.');
     }
 
     const { s3Client, bucketName } = getR2Client();
@@ -90,6 +136,11 @@ export async function deleteR2File(fileName: string) {
       throw new Error('Invalid file name for deletion');
     }
 
+    const subCheck = await validateShopSubscription(fileName);
+    if (!subCheck.valid) {
+      throw new Error(subCheck.error || 'Shop subscription validation failed.');
+    }
+
     const { s3Client, bucketName } = getR2Client();
     const command = new DeleteObjectCommand({
       Bucket: bucketName,
@@ -105,8 +156,7 @@ export async function deleteR2File(fileName: string) {
 }
 
 /**
- * Direct server-side upload to Cloudflare R2 as a bulletproof fallback
- * if client-side presigned fetch is blocked by CORS, adblockers, or mobile network proxies.
+ * Direct server-side upload to Cloudflare R2 with PDF magic bytes validation
  */
 export async function uploadR2Direct(formData: FormData) {
   try {
@@ -121,16 +171,26 @@ export async function uploadR2Direct(formData: FormData) {
       return { success: false, error: 'Invalid file format or name. Only PDF files are allowed.' };
     }
 
-    // Server-side max file size limit: 50MB
+    const subCheck = await validateShopSubscription(fileName);
+    if (!subCheck.valid) {
+      return { success: false, error: subCheck.error || 'Shop subscription is invalid or expired.' };
+    }
+
     const MAX_FILE_SIZE = 50 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
       return { success: false, error: 'File size exceeds the 50MB limit.' };
     }
 
-    const { s3Client, bucketName } = getR2Client();
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // Validate PDF magic bytes (%PDF)
+    const header = buffer.slice(0, 4).toString('utf-8');
+    if (header !== '%PDF') {
+      return { success: false, error: 'Invalid file signature. File is not a valid PDF document.' };
+    }
+
+    const { s3Client, bucketName } = getR2Client();
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: fileName,
@@ -145,4 +205,3 @@ export async function uploadR2Direct(formData: FormData) {
     return { success: false, error: error.message || 'Direct R2 upload failed' };
   }
 }
-

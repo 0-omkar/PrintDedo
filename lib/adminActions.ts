@@ -1,7 +1,7 @@
 'use server';
 
-import { supabase } from '@/lib/supabaseClient';
 import { verifyAdminCredentials } from './adminAuth';
+import { getSupabaseAdmin } from './supabaseServer';
 
 interface AdminAuthPayload {
   adminEmail?: string;
@@ -9,20 +9,15 @@ interface AdminAuthPayload {
 }
 
 /**
- * Helper to verify that admin environment or provided admin credentials are valid before executing server mutations.
+ * Strict server-side authorization check for Super-Admin actions.
+ * Fails closed unless valid admin email and password are provided and verified.
  */
 async function authorizeAdmin(payload?: AdminAuthPayload): Promise<boolean> {
-  if (payload?.adminEmail && payload?.adminPassword) {
-    const res = await verifyAdminCredentials(payload.adminEmail, payload.adminPassword);
-    return res.success;
+  if (!payload || !payload.adminEmail || !payload.adminPassword) {
+    return false;
   }
-  // Check default server environment credentials
-  const envEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-  const envPassword = (process.env.ADMIN_PASSWORD || '').trim();
-  if (envEmail && envPassword) {
-    return true;
-  }
-  return false;
+  const res = await verifyAdminCredentials(payload.adminEmail, payload.adminPassword);
+  return res.success;
 }
 
 /**
@@ -37,15 +32,14 @@ export async function createSubscriptionPlanServer(planObj: {
 }, authPayload?: AdminAuthPayload) {
   const isAuth = await authorizeAdmin(authPayload);
   if (!isAuth) {
-    return { success: false, error: 'Unauthorized admin action' };
+    return { success: false, error: 'Unauthorized: Super Admin credentials required.' };
   }
 
   try {
-    const { error } = await supabase.from('subscription_plans').insert([planObj]);
+    const supabaseAdmin = getSupabaseAdmin();
+    const { error } = await supabaseAdmin.from('plans').upsert([planObj]);
     if (error) {
-      // Fallback try plans table if schema name differs
-      const { error: err2 } = await supabase.from('plans').insert([planObj]);
-      if (err2) return { success: false, error: err2.message };
+      return { success: false, error: error.message };
     }
     return { success: true };
   } catch (err: any) {
@@ -64,14 +58,14 @@ export async function updateSubscriptionPlanServer(planId: string, updatedObj: {
 }, authPayload?: AdminAuthPayload) {
   const isAuth = await authorizeAdmin(authPayload);
   if (!isAuth) {
-    return { success: false, error: 'Unauthorized admin action' };
+    return { success: false, error: 'Unauthorized: Super Admin credentials required.' };
   }
 
   try {
-    const { error } = await supabase.from('subscription_plans').update(updatedObj).eq('id', planId);
+    const supabaseAdmin = getSupabaseAdmin();
+    const { error } = await supabaseAdmin.from('plans').update(updatedObj).eq('id', planId);
     if (error) {
-      const { error: err2 } = await supabase.from('plans').update(updatedObj).eq('id', planId);
-      if (err2) return { success: false, error: err2.message };
+      return { success: false, error: error.message };
     }
     return { success: true };
   } catch (err: any) {
@@ -85,14 +79,14 @@ export async function updateSubscriptionPlanServer(planId: string, updatedObj: {
 export async function deleteSubscriptionPlanServer(planId: string, authPayload?: AdminAuthPayload) {
   const isAuth = await authorizeAdmin(authPayload);
   if (!isAuth) {
-    return { success: false, error: 'Unauthorized admin action' };
+    return { success: false, error: 'Unauthorized: Super Admin credentials required.' };
   }
 
   try {
-    const { error } = await supabase.from('subscription_plans').delete().eq('id', planId);
+    const supabaseAdmin = getSupabaseAdmin();
+    const { error } = await supabaseAdmin.from('plans').delete().eq('id', planId);
     if (error) {
-      const { error: err2 } = await supabase.from('plans').delete().eq('id', planId);
-      if (err2) return { success: false, error: err2.message };
+      return { success: false, error: error.message };
     }
     return { success: true };
   } catch (err: any) {
@@ -106,11 +100,12 @@ export async function deleteSubscriptionPlanServer(planId: string, authPayload?:
 export async function renewShopSubscriptionServer(shopId: string, newExpiryIso: string, planName: string, authPayload?: AdminAuthPayload) {
   const isAuth = await authorizeAdmin(authPayload);
   if (!isAuth) {
-    return { success: false, error: 'Unauthorized admin action' };
+    return { success: false, error: 'Unauthorized: Super Admin credentials required.' };
   }
 
   try {
-    const { error } = await supabase
+    const supabaseAdmin = getSupabaseAdmin();
+    const { error } = await supabaseAdmin
       .from('shops')
       .update({
         subscription_expires_at: newExpiryIso,
@@ -131,11 +126,12 @@ export async function renewShopSubscriptionServer(shopId: string, newExpiryIso: 
 export async function deleteAdminMessageServer(messageId: string, authPayload?: AdminAuthPayload) {
   const isAuth = await authorizeAdmin(authPayload);
   if (!isAuth) {
-    return { success: false, error: 'Unauthorized admin action' };
+    return { success: false, error: 'Unauthorized: Super Admin credentials required.' };
   }
 
   try {
-    const { error } = await supabase.from('admin_messages').delete().eq('id', messageId);
+    const supabaseAdmin = getSupabaseAdmin();
+    const { error } = await supabaseAdmin.from('admin_messages').delete().eq('id', messageId);
     if (error) return { success: false, error: error.message };
     return { success: true };
   } catch (err: any) {
@@ -149,11 +145,12 @@ export async function deleteAdminMessageServer(messageId: string, authPayload?: 
 export async function deletePlatformReviewServer(reviewId: string, authPayload?: AdminAuthPayload) {
   const isAuth = await authorizeAdmin(authPayload);
   if (!isAuth) {
-    return { success: false, error: 'Unauthorized admin action' };
+    return { success: false, error: 'Unauthorized: Super Admin credentials required.' };
   }
 
   try {
-    const { error } = await supabase.from('platform_reviews').delete().eq('id', reviewId);
+    const supabaseAdmin = getSupabaseAdmin();
+    const { error } = await supabaseAdmin.from('platform_reviews').delete().eq('id', reviewId);
     if (error) return { success: false, error: error.message };
     return { success: true };
   } catch (err: any) {
@@ -167,11 +164,12 @@ export async function deletePlatformReviewServer(reviewId: string, authPayload?:
 export async function replyPlatformReviewServer(reviewId: string, reply: string, authPayload?: AdminAuthPayload) {
   const isAuth = await authorizeAdmin(authPayload);
   if (!isAuth) {
-    return { success: false, error: 'Unauthorized admin action' };
+    return { success: false, error: 'Unauthorized: Super Admin credentials required.' };
   }
 
   try {
-    const { error } = await supabase.from('platform_reviews').update({ reply }).eq('id', reviewId);
+    const supabaseAdmin = getSupabaseAdmin();
+    const { error } = await supabaseAdmin.from('platform_reviews').update({ reply }).eq('id', reviewId);
     if (error) return { success: false, error: error.message };
     return { success: true };
   } catch (err: any) {

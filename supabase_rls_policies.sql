@@ -11,6 +11,7 @@ BEGIN
   IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'shops') THEN
     DROP POLICY IF EXISTS "Public Shops Read" ON public.shops;
     DROP POLICY IF EXISTS "Shop Owner Access" ON public.shops;
+    DROP POLICY IF EXISTS "Shop Owner Update Self" ON public.shops;
 
     CREATE POLICY "Public Shops Read"
       ON public.shops FOR SELECT
@@ -34,22 +35,33 @@ BEGIN
   END IF;
 END $$;
 
--- 4. Define policies for Orders
+-- 4. Define strict policies for Orders
 DO $$
 BEGIN
   IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'orders') THEN
     DROP POLICY IF EXISTS "Public Orders Insert" ON public.orders;
     DROP POLICY IF EXISTS "Shop Owner Orders Access" ON public.orders;
+    DROP POLICY IF EXISTS "Shop Owner Orders Select" ON public.orders;
+    DROP POLICY IF EXISTS "Shop Owner Orders Update" ON public.orders;
+    DROP POLICY IF EXISTS "Shop Owner Orders Delete" ON public.orders;
 
     -- Allow customers to submit orders for a shop
     CREATE POLICY "Public Orders Insert"
       ON public.orders FOR INSERT
       WITH CHECK (length(file_path) > 0);
 
-    -- Allow public/shop view of orders
-    CREATE POLICY "Shop Owner Orders Access"
-      ON public.orders FOR ALL
-      USING (true);
+    -- Allow shop owners to view, update, and delete ONLY their own shop's orders
+    CREATE POLICY "Shop Owner Orders Select"
+      ON public.orders FOR SELECT
+      USING (shop_id = auth.uid());
+
+    CREATE POLICY "Shop Owner Orders Update"
+      ON public.orders FOR UPDATE
+      USING (shop_id = auth.uid());
+
+    CREATE POLICY "Shop Owner Orders Delete"
+      ON public.orders FOR DELETE
+      USING (shop_id = auth.uid());
   END IF;
 END $$;
 

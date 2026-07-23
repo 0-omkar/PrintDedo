@@ -21,9 +21,9 @@ CREATE TABLE IF NOT EXISTS public.plans (
 -- The admin panel runs entirely in the browser using the public anonymous client.
 -- Therefore, we must either disable RLS on the plans table, or enable RLS and add public read/write policies.
 
--- OPTION A: Disable RLS (Simplest)
-ALTER TABLE public.plans DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.shops DISABLE ROW LEVEL SECURITY;
+-- Row Level Security (RLS) enabled securely
+ALTER TABLE public.plans ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.shops ENABLE ROW LEVEL SECURITY;
 
 -- OPTION B: Keep RLS enabled but allow public CRUD access (If Option A is not preferred)
 -- ALTER TABLE public.plans ENABLE ROW LEVEL SECURITY;
