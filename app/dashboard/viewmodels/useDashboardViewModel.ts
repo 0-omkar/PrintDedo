@@ -464,6 +464,9 @@ export function useDashboardViewModel() {
           if (elapsed >= threeMinMs) {
             hasChanges = true;
             if (item.order?.id) {
+              if (item.order?.file_path) {
+                import('@/lib/r2').then(r2 => r2.deleteR2File(item.order.file_path)).catch(() => {});
+              }
               supabase.from('orders').delete().eq('id', item.order.id).then(() => {}, () => {});
             }
             return false;
@@ -486,7 +489,6 @@ export function useDashboardViewModel() {
   useEffect(() => {
     const interval = setInterval(() => {
       const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
-      const tenMinutesAgoIso = new Date(tenMinutesAgo).toISOString();
 
       setOrders(prevOrders => {
         const remaining: any[] = [];
@@ -494,6 +496,9 @@ export function useDashboardViewModel() {
           const orderTime = new Date(order.created_at).getTime();
           if (orderTime < tenMinutesAgo) {
             if (order.id) {
+              if (order.file_path) {
+                import('@/lib/r2').then(r2 => r2.deleteR2File(order.file_path)).catch(() => {});
+              }
               supabase.from('orders').delete().eq('id', order.id).then(() => {}, () => {});
             }
           } else {
@@ -509,9 +514,11 @@ export function useDashboardViewModel() {
           .delete()
           .eq('shop_id', userId)
           .eq('status', 'pending')
+          .lt('created_at', new Date(tenMinutesAgo).toISOString())
           .then(() => {}, () => {});
       }
     }, 5000);
+
     
     return () => clearInterval(interval);
   }, [userId]);
@@ -715,13 +722,17 @@ export function useDashboardViewModel() {
 
   const handlePrint = async (order: any) => {
     try {
-      const { data, error } = await supabase.storage
-        .from('xerox-files')
-        .download(order.file_path);
+      const { getPresignedDownloadUrl, deleteR2File } = await import('@/lib/r2');
+      const presigned = await getPresignedDownloadUrl(order.file_path);
+      if (!presigned.success || !presigned.url) {
+        throw new Error(presigned.error || 'Failed to get download URL from Cloudflare R2.');
+      }
 
-      if (error) throw error;
+      const res = await fetch(presigned.url);
+      if (!res.ok) throw new Error('Failed to fetch PDF from Cloudflare R2.');
 
-      const rawBuffer = await data.arrayBuffer();
+      const fileBlob = await res.blob();
+      const rawBuffer = await fileBlob.arrayBuffer();
       const processedPdfBytes = await slicePdfIfNeeded(rawBuffer, order.customer_name);
       const url = URL.createObjectURL(new Blob([new Uint8Array(processedPdfBytes)], { type: 'application/pdf' }));
       
@@ -748,6 +759,16 @@ export function useDashboardViewModel() {
                 .from('orders')
                 .update({ status: 'completed' })
                 .eq('id', order.id);
+
+              // Auto-delete file from Cloudflare R2 3 minutes after being moved to Recents queue
+              setTimeout(async () => {
+                try {
+                  await deleteR2File(order.file_path);
+                } catch (e) {
+                  console.error('Auto-delete R2 file error:', e);
+                }
+              }, 3 * 60 * 1000); // 3 minutes
+
 
               const now = Date.now();
               setRecentOrders(prev => {

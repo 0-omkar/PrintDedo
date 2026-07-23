@@ -292,11 +292,24 @@ export function useShopDropBoxViewModel(shopId: string) {
         const fileExt = doc.file.name.split('.').pop();
         const fileName = `${shopId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
 
-        const { data: uploadData, error: uploadError } = await supabase.storage
-          .from('xerox-files')
-          .upload(fileName, doc.file);
+        const { getPresignedUploadUrl } = await import('@/lib/r2');
+        const presigned = await getPresignedUploadUrl(fileName, doc.file.type || 'application/pdf');
+        if (!presigned.success || !presigned.url) {
+          throw new Error(presigned.error || 'Failed to generate upload URL for Cloudflare R2.');
+        }
 
-        if (uploadError) throw uploadError;
+        const uploadRes = await fetch(presigned.url, {
+          method: 'PUT',
+          body: doc.file,
+          headers: {
+            'Content-Type': doc.file.type || 'application/pdf',
+          },
+        });
+
+        if (!uploadRes.ok) {
+          throw new Error('Failed to upload PDF file to Cloudflare R2.');
+        }
+
 
         let pageSelectionStr = '';
         if (doc.pageSelectionMode === 'range') {

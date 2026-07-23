@@ -18,7 +18,6 @@ export const PrintableQRPoster = ({ userId, origin, shopName }: PrintableQRPoste
         <BrandLogo size="lg" showSubtitle />
         <div className="w-20 h-1 bg-yellow-400 rounded-full my-1" />
         <div className="space-y-0.5">
-
           <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight text-slate-950">{shopName || 'Print Shop'}</h1>
         </div>
       </div>
