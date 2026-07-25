@@ -61,6 +61,7 @@ export default function DashboardPage() {
           onOpenRecents={() => vm.setIsRecentsModalOpen(true)}
           onOpenShopReviews={() => vm.setIsShopReviewsModalOpen(true)}
           handlePrint={vm.handlePrint}
+          handleDownload={vm.handleDownload}
           formatFilename={vm.formatFilename}
         />
 
@@ -71,6 +72,7 @@ export default function DashboardPage() {
           recentOrders={vm.recentOrders}
           formatFilename={vm.formatFilename}
           handlePrint={vm.handlePrint}
+          handleDownload={vm.handleDownload}
         />
 
         {/* Shop Reviews Modal */}

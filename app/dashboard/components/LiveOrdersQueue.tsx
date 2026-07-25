@@ -16,6 +16,7 @@ interface LiveOrdersQueueProps {
   onOpenRecents: () => void;
   onOpenShopReviews?: () => void;
   handlePrint: (order: any) => void;
+  handleDownload?: (order: any) => void;
   formatFilename: (path: string) => string;
 }
 
@@ -33,6 +34,7 @@ export const LiveOrdersQueue = ({
   onOpenRecents,
   onOpenShopReviews,
   handlePrint,
+  handleDownload,
   formatFilename,
 }: LiveOrdersQueueProps) => {
   const subAlert = getSubscriptionAlert();
@@ -304,7 +306,17 @@ export const LiveOrdersQueue = ({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end space-x-4 shrink-0">
+                <div className="flex items-center justify-end space-x-2 shrink-0">
+                  {handleDownload && (
+                    <button
+                      onClick={() => handleDownload(order)}
+                      title="Download file directly"
+                      className="flex items-center space-x-1.5 bg-slate-100 text-slate-800 hover:bg-slate-200 px-4 py-3 rounded-xl font-bold transition-colors cursor-pointer border border-slate-200 text-sm md:text-base"
+                    >
+                      <Download className="w-5 h-5 text-slate-700" />
+                      <span>Download</span>
+                    </button>
+                  )}
                   <button 
                     onClick={() => handlePrint(order)}
                     className="flex items-center space-x-2 bg-yellow-400 text-black px-6 py-3 rounded-xl font-bold hover:bg-yellow-500 transition-colors shadow-sm cursor-pointer border-none text-sm md:text-base"

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import { PDFDocument } from 'pdf-lib';
 import { RecentOrder, PriceTier, Addon, ShopProfile } from '../types';
 import { ShopReviewItem } from '../components/ShopReviewsModal';
+import { toast } from 'sonner';
 
 export function useDashboardViewModel() {
   const router = useRouter();
@@ -739,58 +740,79 @@ export function useDashboardViewModel() {
     }
   };
 
+  const markOrderCompleted = async (order: any) => {
+    const { deleteR2File } = await import('@/lib/r2');
+    const didPrint = window.confirm("Did the document print/download successfully?\n\nClick OK to mark as completed and move it to Recents queue.");
+    if (didPrint) {
+      await supabase
+        .from('orders')
+        .update({ status: 'completed' })
+        .eq('id', order.id);
+
+      setTimeout(async () => {
+        try {
+          await deleteR2File(order.file_path);
+        } catch (e) {
+          console.error('Auto-delete R2 file error:', e);
+        }
+      }, 3 * 60 * 1000);
+
+      const now = Date.now();
+      setRecentOrders(prev => {
+        const updated = [
+          { order, completedAt: now },
+          ...prev.filter(r => r.order.id !== order.id)
+        ];
+        if (userId) {
+          localStorage.setItem(`printdedo_recent_orders_${userId}`, JSON.stringify(updated));
+        }
+        return updated;
+      });
+
+      if (userId) fetchOrders(userId);
+    }
+  };
+
+  const handleDownload = async (order: any) => {
+    try {
+      const { getPresignedDownloadUrl } = await import('@/lib/r2');
+      const presigned = await getPresignedDownloadUrl(order.file_path);
+      if (!presigned.success || !presigned.url) throw new Error('Download URL failed.');
+
+      const a = document.createElement('a');
+      a.href = presigned.url;
+      a.download = formatFilename(order.file_path);
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (err: any) {
+      console.error('Download error:', err);
+      toast.error('Failed to download file.');
+    }
+  };
+
   const handlePrint = async (order: any) => {
     try {
-      const { getPresignedDownloadUrl, deleteR2File } = await import('@/lib/r2');
+      const isMobileOrTablet = /Android|iPhone|iPad/i.test(navigator.userAgent);
+      if (isMobileOrTablet) {
+        toast.info('Mobile device detected — downloading file directly.');
+        await handleDownload(order);
+        return;
+      }
+
+      const { getPresignedDownloadUrl } = await import('@/lib/r2');
       const presigned = await getPresignedDownloadUrl(order.file_path);
       if (!presigned.success || !presigned.url) {
         throw new Error(presigned.error || 'Failed to get download URL from Cloudflare R2.');
       }
 
       const filePathLower = (order.file_path || '').toLowerCase();
-      const isPdf = filePathLower.endsWith('.pdf');
+      const isPdf = order.mime_type ? order.mime_type === 'application/pdf' : filePathLower.endsWith('.pdf');
 
       if (!isPdf) {
-        // Direct browser file download for PowerPoint, Word, Excel, and raw formats
-        const a = document.createElement('a');
-        a.href = presigned.url;
-        a.download = formatFilename(order.file_path);
-        a.target = '_blank';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-
-        setTimeout(async () => {
-          const didPrint = window.confirm("File downloaded to your computer!\n\nClick OK after printing to mark as completed and move to Recents queue.");
-          if (didPrint) {
-            await supabase
-              .from('orders')
-              .update({ status: 'completed' })
-              .eq('id', order.id);
-
-            setTimeout(async () => {
-              try {
-                await deleteR2File(order.file_path);
-              } catch (e) {
-                console.error('Auto-delete R2 file error:', e);
-              }
-            }, 3 * 60 * 1000);
-
-            const now = Date.now();
-            setRecentOrders(prev => {
-              const updated = [
-                { order, completedAt: now },
-                ...prev.filter(r => r.order.id !== order.id)
-              ];
-              if (userId) {
-                localStorage.setItem(`printdedo_recent_orders_${userId}`, JSON.stringify(updated));
-              }
-              return updated;
-            });
-
-            if (userId) fetchOrders(userId);
-          }
-        }, 500);
+        toast.info('Non-PDF file — downloading for local printing.');
+        await handleDownload(order);
         return;
       }
 
@@ -800,65 +822,43 @@ export function useDashboardViewModel() {
       const fileBlob = await res.blob();
       const rawBuffer = await fileBlob.arrayBuffer();
       const processedPdfBytes = await slicePdfIfNeeded(rawBuffer, order.customer_name);
-      const url = URL.createObjectURL(new Blob([new Uint8Array(processedPdfBytes)], { type: 'application/pdf' }));
-      
-      const iframe = document.createElement('iframe');
-      iframe.style.visibility = 'hidden';
-      iframe.style.position = 'absolute';
-      iframe.style.width = '1px';
-      iframe.style.height = '1px';
-      iframe.style.border = 'none';
-      
-      iframe.src = url;
-      document.body.appendChild(iframe);
-      
-      iframe.onload = () => {
-        setTimeout(() => {
-          iframe.contentWindow?.focus();
-          iframe.contentWindow?.print();
+      const pdfBlobUrl = URL.createObjectURL(new Blob([new Uint8Array(processedPdfBytes)], { type: 'application/pdf' }));
 
-          setTimeout(async () => {
-            const didPrint = window.confirm("Did the document print successfully?\n\nClick OK to mark as completed and move it to Recents queue.");
-            
-            if (didPrint) {
-              await supabase
-                .from('orders')
-                .update({ status: 'completed' })
-                .eq('id', order.id);
+      const printWin = window.open(pdfBlobUrl, '_blank');
 
-              // Auto-delete file from Cloudflare R2 3 minutes after being moved to Recents queue
-              setTimeout(async () => {
-                try {
-                  await deleteR2File(order.file_path);
-                } catch (e) {
-                  console.error('Auto-delete R2 file error:', e);
-                }
-              }, 3 * 60 * 1000); // 3 minutes
+      if (!printWin) {
+        toast.warning('Popup blocked — downloading instead.');
+        URL.revokeObjectURL(pdfBlobUrl);
+        await handleDownload(order);
+        return;
+      }
 
-              const now = Date.now();
-              setRecentOrders(prev => {
-                const updated = [
-                  { order, completedAt: now },
-                  ...prev.filter(r => r.order.id !== order.id)
-                ];
-                if (userId) {
-                  localStorage.setItem(`printdedo_recent_orders_${userId}`, JSON.stringify(updated));
-                }
-                return updated;
-              });
-
-              if (userId) fetchOrders(userId);
-            }
-
-            document.body.removeChild(iframe);
-            URL.revokeObjectURL(url);
-          }, 500);
-
-        }, 200);
+      let cleaned = false;
+      const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
+        URL.revokeObjectURL(pdfBlobUrl);
+        clearTimeout(strandedTimer);
+        markOrderCompleted(order);
       };
-    } catch (err) {
-      console.error(err);
-      alert('Failed to load file for printing.');
+
+      printWin.addEventListener('afterprint', () => {
+        printWin.close();
+      });
+
+      printWin.addEventListener('pagehide', cleanup);
+
+      const strandedTimer = setTimeout(() => {
+        if (!printWin.closed) {
+          toast.message('Still printing order?', {
+            action: { label: 'Close tab', onClick: () => printWin.close() },
+          });
+        }
+      }, 30000);
+
+    } catch (err: any) {
+      console.error('Print error:', err);
+      toast.error(err.message || 'Failed to open document for printing.');
     }
   };
 
@@ -937,5 +937,6 @@ export function useDashboardViewModel() {
     handleLogout,
     handlePrintQR,
     handlePrint,
+    handleDownload,
   };
 }

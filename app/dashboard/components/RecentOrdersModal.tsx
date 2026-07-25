@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, Printer, X } from 'lucide-react';
+import { CheckCircle, Printer, Download, X } from 'lucide-react';
 import { RecentOrder } from '../types';
 
 interface RecentOrdersModalProps {
@@ -8,6 +8,7 @@ interface RecentOrdersModalProps {
   recentOrders: RecentOrder[];
   formatFilename: (path: string) => string;
   handlePrint: (order: any) => void;
+  handleDownload?: (order: any) => void;
 }
 
 export const RecentOrdersModal = ({
@@ -16,6 +17,7 @@ export const RecentOrdersModal = ({
   recentOrders,
   formatFilename,
   handlePrint,
+  handleDownload,
 }: RecentOrdersModalProps) => {
   const [now, setNow] = useState<number>(() => Date.now());
 
@@ -92,13 +94,25 @@ export const RecentOrdersModal = ({
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handlePrint(order)}
-                    className="bg-yellow-400 hover:bg-yellow-500 text-black font-bold px-4 py-2.5 rounded-xl text-xs transition flex justify-center items-center space-x-1.5 border-none cursor-pointer shadow-xs"
-                  >
-                    <Printer className="w-4 h-4" />
-                    <span>Reprint</span>
-                  </button>
+                  <div className="flex items-center space-x-2 shrink-0">
+                    {handleDownload && (
+                      <button
+                        onClick={() => handleDownload(order)}
+                        title="Download file directly"
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 py-2.5 rounded-xl text-xs transition flex justify-center items-center space-x-1 border border-slate-200 cursor-pointer"
+                      >
+                        <Download className="w-4 h-4 text-slate-700" />
+                        <span>Download</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handlePrint(order)}
+                      className="bg-yellow-400 hover:bg-yellow-500 text-black font-bold px-4 py-2.5 rounded-xl text-xs transition flex justify-center items-center space-x-1.5 border-none cursor-pointer shadow-xs"
+                    >
+                      <Printer className="w-4 h-4" />
+                      <span>Reprint</span>
+                    </button>
+                  </div>
                 </div>
               );
             })
