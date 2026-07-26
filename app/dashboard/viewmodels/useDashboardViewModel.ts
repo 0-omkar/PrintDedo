@@ -684,7 +684,7 @@ export function useDashboardViewModel() {
       setIsEditingBanner(false);
     } catch (err) {
       console.error(err);
-      alert('Failed to save shop details.');
+      toast.error('Failed to save shop details.');
     }
     setSaving(false);
   };
@@ -716,17 +716,14 @@ export function useDashboardViewModel() {
     const targetOrder = orders.find(o => o.id === orderId);
     if (!targetOrder) return;
 
-    if (promptConfirmation) {
-      const didConfirm = window.confirm(`Mark order #${orderId.slice(0, 8)} as completed and move to Recents queue?`);
-      if (!didConfirm) return;
-    }
-
     try {
       const { deleteR2File } = await import('@/lib/r2');
       await supabase
         .from('orders')
         .update({ status: 'completed' })
         .eq('id', orderId);
+
+      toast.success(`Order #${orderId.slice(0, 8)} completed & moved to Recents!`);
 
       setTimeout(async () => {
         try {

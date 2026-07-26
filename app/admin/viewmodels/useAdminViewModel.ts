@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabaseClient';
 import { ActiveView, PlanItem, ShopItem, AdminMessage, StorageMetrics, PlatformReview } from '../types';
 
@@ -193,11 +194,11 @@ export function useAdminViewModel() {
       const { deleteAdminMessageServer } = await import('@/lib/adminActions');
       const res = await deleteAdminMessageServer(id, { adminEmail, adminPassword });
       if (!res.success) {
-        alert(res.error || 'Failed to delete message');
+        toast.error(res.error || 'Failed to delete message');
         return;
       }
     } catch (e) {
-      alert('Server error deleting message');
+      toast.error('Server error deleting message');
       return;
     }
 
@@ -236,10 +237,10 @@ export function useAdminViewModel() {
       if (res.success) {
         fetchPlans();
       } else {
-        alert(res.error || 'Failed to create plan');
+        toast.error(res.error || 'Failed to create plan');
       }
     } catch (err: any) {
-      alert(err.message || 'Error creating plan');
+      toast.error(err.message || 'Error creating plan');
     }
 
     setShowCreatePlan(false);
@@ -274,10 +275,10 @@ export function useAdminViewModel() {
       if (res.success) {
         fetchPlans();
       } else {
-        alert(res.error || 'Failed to update plan');
+        toast.error(res.error || 'Failed to update plan');
       }
     } catch (err: any) {
-      alert(err.message || 'Error updating plan');
+      toast.error(err.message || 'Error updating plan');
     }
 
     setEditingPlanId(null);
@@ -293,10 +294,10 @@ export function useAdminViewModel() {
       if (res.success) {
         fetchPlans();
       } else {
-        alert(res.error || 'Failed to delete plan');
+        toast.error(res.error || 'Failed to delete plan');
       }
     } catch (err: any) {
-      alert(err.message || 'Error deleting plan');
+      toast.error(err.message || 'Error deleting plan');
     }
     setIsDeletingPlan(false);
     setPlanToDelete(null);
@@ -431,7 +432,7 @@ export function useAdminViewModel() {
       setShops(prev => prev.filter(s => s.id !== shopToDelete.id));
       setShopToDelete(null);
     } catch (err: any) {
-      alert(`Error deleting shop: ${err.message}`);
+      toast.error(`Error deleting shop: ${err.message}`);
     } finally {
       setIsDeletingShop(false);
     }
@@ -468,9 +469,9 @@ export function useAdminViewModel() {
       const { renewShopSubscriptionServer } = await import('@/lib/adminActions');
       const res = await renewShopSubscriptionServer(activeRenewalShop.id, newExpiry.toISOString(), planName, { adminEmail, adminPassword });
       if (res.success) serverSuccess = true;
-      else alert(res.error || 'Failed to update subscription');
+      else toast.error(res.error || 'Failed to update subscription');
     } catch (e: any) {
-      alert(e.message || 'Error updating subscription');
+      toast.error(e.message || 'Error updating subscription');
     }
 
     if (serverSuccess) {
@@ -577,11 +578,11 @@ export function useAdminViewModel() {
       const { deletePlatformReviewServer } = await import('@/lib/adminActions');
       const res = await deletePlatformReviewServer(id, { adminEmail, adminPassword });
       if (!res.success) {
-        alert(res.error || 'Failed to delete review');
+        toast.error(res.error || 'Failed to delete review');
         return;
       }
     } catch (e: any) {
-      alert(e.message || 'Error deleting review');
+      toast.error(e.message || 'Error deleting review');
       return;
     }
 
@@ -597,11 +598,11 @@ export function useAdminViewModel() {
       const { replyPlatformReviewServer } = await import('@/lib/adminActions');
       const res = await replyPlatformReviewServer(id, reply, { adminEmail, adminPassword });
       if (!res.success) {
-        alert(res.error || 'Failed to post reply');
+        toast.error(res.error || 'Failed to post reply');
         return;
       }
     } catch (e: any) {
-      alert(e.message || 'Error posting reply');
+      toast.error(e.message || 'Error posting reply');
       return;
     }
 
