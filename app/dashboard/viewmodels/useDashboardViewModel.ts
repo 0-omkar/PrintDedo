@@ -689,10 +689,63 @@ export function useDashboardViewModel() {
     }, 500);
   };
 
+  const completeOrderInDb = async (orderId: string, promptConfirmation = false) => {
+    const targetOrder = orders.find(o => o.id === orderId);
+    if (!targetOrder) return;
+
+    if (promptConfirmation) {
+      const didConfirm = window.confirm(`Mark order #${orderId.slice(0, 8)} as completed and move to Recents queue?`);
+      if (!didConfirm) return;
+    }
+
+    try {
+      const { deleteR2File } = await import('@/lib/r2');
+      await supabase
+        .from('orders')
+        .update({ status: 'completed' })
+        .eq('id', orderId);
+
+      setTimeout(async () => {
+        try {
+          await deleteR2File(targetOrder.file_path);
+        } catch (e) {
+          console.error('Auto-delete R2 file error:', e);
+        }
+      }, 3 * 60 * 1000);
+
+      const now = Date.now();
+      setRecentOrders(prev => {
+        const updated = [
+          { order: targetOrder, completedAt: now },
+          ...prev.filter(r => r.order.id !== targetOrder.id)
+        ];
+        if (userId) {
+          localStorage.setItem(`printdedo_recent_orders_${userId}`, JSON.stringify(updated));
+        }
+        return updated;
+      });
+
+      if (userId) fetchOrders(userId);
+      toast.success('Order completed & moved to Recents Queue!');
+    } catch (err) {
+      console.error('Failed to complete order in DB:', err);
+    }
+  };
+
+  useEffect(() => {
+    const handleWindowMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'PRINTDEDO_ORDER_COMPLETED' && event.data.orderId) {
+        completeOrderInDb(event.data.orderId, false);
+      }
+    };
+    window.addEventListener('message', handleWindowMessage);
+    return () => window.removeEventListener('message', handleWindowMessage);
+  }, [orders, userId]);
+
   const slicePdfIfNeeded = async (pdfArrayBuffer: ArrayBuffer, customerName: string): Promise<Uint8Array> => {
     if (!customerName) return new Uint8Array(pdfArrayBuffer);
     
-    const match = customerName.match(/\[Pages\s+([^\]]+)\]/i);
+    const match = customerName.match(/\[(?:Pages|All)\s+([^\]]+)\]/i);
     if (!match) return new Uint8Array(pdfArrayBuffer);
 
     const spec = match[1].trim();
@@ -703,14 +756,16 @@ export function useDashboardViewModel() {
       const totalPages = srcDoc.getPageCount();
 
       const selectedIndices: number[] = [];
-      const parts = spec.split(',');
+      const normalizedSpec = spec.replace(/[\u2013\u2014]/g, '-');
+      const parts = normalizedSpec.split(',');
+
       for (const part of parts) {
         const trimmed = part.trim();
         if (!trimmed) continue;
         if (trimmed.includes('-')) {
-          const [startStr, endStr] = trimmed.split('-');
-          const start = parseInt(startStr, 10);
-          const end = parseInt(endStr, 10);
+          const dashIdx = trimmed.indexOf('-');
+          const start = parseInt(trimmed.substring(0, dashIdx).trim(), 10);
+          const end = parseInt(trimmed.substring(dashIdx + 1).trim(), 10);
           if (!isNaN(start) && !isNaN(end)) {
             const s = Math.max(1, Math.min(start, end));
             const e = Math.min(totalPages, Math.max(start, end));
@@ -728,7 +783,7 @@ export function useDashboardViewModel() {
 
       if (selectedIndices.length === 0) return new Uint8Array(pdfArrayBuffer);
 
-      const uniqueIndices = Array.from(new Set(selectedIndices));
+      const uniqueIndices = Array.from(new Set(selectedIndices)).sort((a, b) => a - b);
       const dstDoc = await PDFDocument.create();
       const copiedPages = await dstDoc.copyPages(srcDoc, uniqueIndices);
       copiedPages.forEach(p => dstDoc.addPage(p));
@@ -740,52 +795,46 @@ export function useDashboardViewModel() {
     }
   };
 
-  const markOrderCompleted = async (order: any) => {
-    const { deleteR2File } = await import('@/lib/r2');
-    const didPrint = window.confirm("Did the document print/download successfully?\n\nClick OK to mark as completed and move it to Recents queue.");
-    if (didPrint) {
-      await supabase
-        .from('orders')
-        .update({ status: 'completed' })
-        .eq('id', order.id);
-
-      setTimeout(async () => {
-        try {
-          await deleteR2File(order.file_path);
-        } catch (e) {
-          console.error('Auto-delete R2 file error:', e);
-        }
-      }, 3 * 60 * 1000);
-
-      const now = Date.now();
-      setRecentOrders(prev => {
-        const updated = [
-          { order, completedAt: now },
-          ...prev.filter(r => r.order.id !== order.id)
-        ];
-        if (userId) {
-          localStorage.setItem(`printdedo_recent_orders_${userId}`, JSON.stringify(updated));
-        }
-        return updated;
-      });
-
-      if (userId) fetchOrders(userId);
-    }
-  };
-
   const handleDownload = async (order: any) => {
     try {
       const { getPresignedDownloadUrl } = await import('@/lib/r2');
       const presigned = await getPresignedDownloadUrl(order.file_path);
       if (!presigned.success || !presigned.url) throw new Error('Download URL failed.');
 
+      const filePathLower = (order.file_path || '').toLowerCase();
+      const isPdf = order.mime_type ? order.mime_type === 'application/pdf' : filePathLower.endsWith('.pdf');
+
+      let downloadBlob: Blob;
+      const filename = formatFilename(order.file_path);
+
+      if (isPdf) {
+        const res = await fetch(presigned.url);
+        if (!res.ok) throw new Error('Failed to fetch PDF for download.');
+        const rawBuffer = await (await res.blob()).arrayBuffer();
+        const processedBytes = await slicePdfIfNeeded(rawBuffer, order.customer_name);
+        downloadBlob = new Blob([new Uint8Array(processedBytes)], { type: 'application/pdf' });
+      } else {
+        const res = await fetch(presigned.url);
+        if (!res.ok) throw new Error('Failed to fetch file for download.');
+        downloadBlob = await res.blob();
+      }
+
+      // Local blob URL guarantees direct 1-click download without opening a new tab
+      const localBlobUrl = URL.createObjectURL(downloadBlob);
       const a = document.createElement('a');
-      a.href = presigned.url;
-      a.download = formatFilename(order.file_path);
-      a.target = '_blank';
+      a.href = localBlobUrl;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(localBlobUrl), 10000);
+
+      toast.success('Download started directly!');
+
+      // Prompt to mark completed after download
+      setTimeout(() => {
+        completeOrderInDb(order.id, true);
+      }, 500);
     } catch (err: any) {
       console.error('Download error:', err);
       toast.error('Failed to download file.');
@@ -793,9 +842,40 @@ export function useDashboardViewModel() {
   };
 
   const handlePrint = async (order: any) => {
+    // 1. Synchronously open popup tab to bypass popup blockers
+    const printWin = window.open('about:blank', '_blank');
+    if (!printWin) {
+      toast.warning('Popup blocked — downloading instead.');
+      await handleDownload(order);
+      return;
+    }
+
     try {
+      // Display sleek dark theme loader in print tab while preparing PDF
+      printWin.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Preparing Print Job... - PrintDedo</title>
+          <style>
+            body { margin:0; padding:0; background:#0f172a; color:#f8fafc; font-family:-apple-system,BlinkMacSystemFont,sans-serif; height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+            .spinner { border: 4px solid #334155; border-top: 4px solid #facc15; border-radius: 50%; width: 44px; height: 44px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+            @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+            h3 { margin: 0 0 8px 0; font-size: 18px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
+            p { margin: 0; font-size: 13px; color: #94a3b8; }
+          </style>
+        </head>
+        <body>
+          <div class="spinner"></div>
+          <h3>Preparing Document for Print</h3>
+          <p>Please wait while PrintDedo processes page selection and prepares print preview...</p>
+        </body>
+        </html>
+      `);
+
       const isMobileOrTablet = /Android|iPhone|iPad/i.test(navigator.userAgent);
       if (isMobileOrTablet) {
+        printWin.close();
         toast.info('Mobile device detected — downloading file directly.');
         await handleDownload(order);
         return;
@@ -804,13 +884,14 @@ export function useDashboardViewModel() {
       const { getPresignedDownloadUrl } = await import('@/lib/r2');
       const presigned = await getPresignedDownloadUrl(order.file_path);
       if (!presigned.success || !presigned.url) {
-        throw new Error(presigned.error || 'Failed to get download URL from Cloudflare R2.');
+        throw new Error(presigned.error || 'Failed to get download URL from R2.');
       }
 
       const filePathLower = (order.file_path || '').toLowerCase();
       const isPdf = order.mime_type ? order.mime_type === 'application/pdf' : filePathLower.endsWith('.pdf');
 
       if (!isPdf) {
+        printWin.close();
         toast.info('Non-PDF file — downloading for local printing.');
         await handleDownload(order);
         return;
@@ -824,40 +905,84 @@ export function useDashboardViewModel() {
       const processedPdfBytes = await slicePdfIfNeeded(rawBuffer, order.customer_name);
       const pdfBlobUrl = URL.createObjectURL(new Blob([new Uint8Array(processedPdfBytes)], { type: 'application/pdf' }));
 
-      const printWin = window.open(pdfBlobUrl, '_blank');
-
-      if (!printWin) {
-        toast.warning('Popup blocked — downloading instead.');
-        URL.revokeObjectURL(pdfBlobUrl);
-        await handleDownload(order);
-        return;
+      let pageSpecLabel = 'All Pages';
+      const pageMatch = (order.customer_name || '').match(/\[(?:Pages|All)\s+([^\]]+)\]/i);
+      if (pageMatch && pageMatch[1]) {
+        pageSpecLabel = `Pages: ${pageMatch[1]}`;
       }
 
-      let cleaned = false;
-      const cleanup = () => {
-        if (cleaned) return;
-        cleaned = true;
-        URL.revokeObjectURL(pdfBlobUrl);
-        clearTimeout(strandedTimer);
-        markOrderCompleted(order);
-      };
+      // Write full topbar print viewer document into printWin
+      printWin.document.open();
+      printWin.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Printing ${formatFilename(order.file_path)} - PrintDedo</title>
+          <style>
+            body { margin:0; padding:0; background:#0f172a; font-family:-apple-system,BlinkMacSystemFont,sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+            .topbar { background:#1e293b; padding:12px 24px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); }
+            .info h2 { margin:0; font-size:15px; color:#f8fafc; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; }
+            .info p { margin:3px 0 0 0; font-size:12px; color:#94a3b8; font-weight:600; }
+            .btn-group { display:flex; gap:12px; align-items:center; }
+            .btn { background:#facc15; color:#000; border:none; padding:9px 18px; font-weight:800; font-size:13px; border-radius:10px; cursor:pointer; transition: background 0.2s; }
+            .btn:hover { background:#eab308; }
+            .btn-close { background:#334155; color:#f8fafc; }
+            .btn-close:hover { background:#475569; }
+            iframe { flex:1; width:100%; border:none; background:#525659; }
+          </style>
+        </head>
+        <body>
+          <div class="topbar">
+            <div class="info">
+              <h2>🖨️ ${formatFilename(order.file_path)}</h2>
+              <p>Customer: ${order.customer_name || 'Anonymous'} • ${pageSpecLabel}</p>
+            </div>
+            <div class="btn-group">
+              <button class="btn" onclick="triggerPrint()">🖨️ Print Now</button>
+              <button class="btn btn-close" onclick="closeAndComplete()">Done / Complete Order</button>
+            </div>
+          </div>
+          <iframe id="pdfFrame" src="${pdfBlobUrl}"></iframe>
+          <script>
+            function triggerPrint() {
+              const frame = document.getElementById('pdfFrame');
+              try {
+                frame.contentWindow.focus();
+                frame.contentWindow.print();
+              } catch(e) {
+                window.print();
+              }
+            }
 
-      printWin.addEventListener('afterprint', () => {
-        printWin.close();
-      });
+            function closeAndComplete() {
+              if (window.opener && !window.opener.closed) {
+                window.opener.postMessage({ type: 'PRINTDEDO_ORDER_COMPLETED', orderId: '${order.id}' }, '*');
+              }
+              window.close();
+            }
 
-      printWin.addEventListener('pagehide', cleanup);
+            window.addEventListener('afterprint', () => {
+              setTimeout(closeAndComplete, 400);
+            });
 
-      const strandedTimer = setTimeout(() => {
-        if (!printWin.closed) {
-          toast.message('Still printing order?', {
-            action: { label: 'Close tab', onClick: () => printWin.close() },
-          });
-        }
-      }, 30000);
+            window.addEventListener('beforeunload', () => {
+              if (window.opener && !window.opener.closed) {
+                window.opener.postMessage({ type: 'PRINTDEDO_ORDER_COMPLETED', orderId: '${order.id}' }, '*');
+              }
+            });
+
+            document.getElementById('pdfFrame').onload = () => {
+              setTimeout(triggerPrint, 600);
+            };
+          </script>
+        </body>
+        </html>
+      `);
+      printWin.document.close();
 
     } catch (err: any) {
       console.error('Print error:', err);
+      if (printWin && !printWin.closed) printWin.close();
       toast.error(err.message || 'Failed to open document for printing.');
     }
   };
