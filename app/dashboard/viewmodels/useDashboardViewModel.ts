@@ -689,6 +689,15 @@ export function useDashboardViewModel() {
     }, 500);
   };
 
+  const escapeHtml = (str: string) => {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+
   const completeOrderInDb = async (orderId: string, promptConfirmation = false) => {
     const targetOrder = orders.find(o => o.id === orderId);
     if (!targetOrder) return;
@@ -734,6 +743,8 @@ export function useDashboardViewModel() {
 
   useEffect(() => {
     const handleWindowMessage = (event: MessageEvent) => {
+      // Production-level origin validation to prevent unauthorized postMessage execution
+      if (typeof window !== 'undefined' && event.origin !== window.location.origin) return;
       if (event.data && event.data.type === 'PRINTDEDO_ORDER_COMPLETED' && event.data.orderId) {
         completeOrderInDb(event.data.orderId, false);
       }
@@ -911,13 +922,34 @@ export function useDashboardViewModel() {
         pageSpecLabel = `Pages: ${pageMatch[1]}`;
       }
 
-      // Write full topbar print viewer document into printWin
+      const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '*';
+      const safeFilename = escapeHtml(formatFilename(order.file_path));
+      const safeCustomerName = escapeHtml(order.customer_name || 'Anonymous');
+      const safePageSpec = escapeHtml(pageSpecLabel);
+      const safeOrderId = escapeHtml(order.id);
+
+      // 30-Second Stranded Tab Reminder
+      const strandedTimer = setTimeout(() => {
+        if (printWin && !printWin.closed) {
+          toast.message(`Still printing order #${safeOrderId.slice(0, 8)}?`, {
+            action: {
+              label: 'Close Tab & Complete',
+              onClick: () => {
+                if (!printWin.closed) printWin.close();
+                completeOrderInDb(order.id, false);
+              },
+            },
+          });
+        }
+      }, 30000);
+
+      // Write full topbar print viewer document into printWin with strict origin checking & HTML escaping
       printWin.document.open();
       printWin.document.write(`
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Printing ${formatFilename(order.file_path)} - PrintDedo</title>
+          <title>Printing ${safeFilename} - PrintDedo</title>
           <style>
             body { margin:0; padding:0; background:#0f172a; font-family:-apple-system,BlinkMacSystemFont,sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
             .topbar { background:#1e293b; padding:12px 24px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); }
@@ -934,8 +966,8 @@ export function useDashboardViewModel() {
         <body>
           <div class="topbar">
             <div class="info">
-              <h2>🖨️ ${formatFilename(order.file_path)}</h2>
-              <p>Customer: ${order.customer_name || 'Anonymous'} • ${pageSpecLabel}</p>
+              <h2>🖨️ ${safeFilename}</h2>
+              <p>Customer: ${safeCustomerName} • ${safePageSpec}</p>
             </div>
             <div class="btn-group">
               <button class="btn" onclick="triggerPrint()">🖨️ Print Now</button>
@@ -955,9 +987,11 @@ export function useDashboardViewModel() {
             }
 
             function closeAndComplete() {
-              if (window.opener && !window.opener.closed) {
-                window.opener.postMessage({ type: 'PRINTDEDO_ORDER_COMPLETED', orderId: '${order.id}' }, '*');
-              }
+              try {
+                if (window.opener && !window.opener.closed) {
+                  window.opener.postMessage({ type: 'PRINTDEDO_ORDER_COMPLETED', orderId: '${safeOrderId}' }, '${currentOrigin}');
+                }
+              } catch(e) {}
               window.close();
             }
 
@@ -966,9 +1000,11 @@ export function useDashboardViewModel() {
             });
 
             window.addEventListener('beforeunload', () => {
-              if (window.opener && !window.opener.closed) {
-                window.opener.postMessage({ type: 'PRINTDEDO_ORDER_COMPLETED', orderId: '${order.id}' }, '*');
-              }
+              try {
+                if (window.opener && !window.opener.closed) {
+                  window.opener.postMessage({ type: 'PRINTDEDO_ORDER_COMPLETED', orderId: '${safeOrderId}' }, '${currentOrigin}');
+                }
+              } catch(e) {}
             });
 
             document.getElementById('pdfFrame').onload = () => {
