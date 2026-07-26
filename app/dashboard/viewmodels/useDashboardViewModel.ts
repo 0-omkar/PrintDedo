@@ -820,7 +820,7 @@ export function useDashboardViewModel() {
     }
   };
 
-  const handleDownload = async (order: any) => {
+  const executeFileDownload = async (order: any) => {
     try {
       const { getPresignedDownloadUrl } = await import('@/lib/r2');
       const presigned = await getPresignedDownloadUrl(order.file_path);
@@ -855,15 +855,14 @@ export function useDashboardViewModel() {
       setTimeout(() => URL.revokeObjectURL(localBlobUrl), 10000);
 
       toast.success('Download started directly!');
-
-      // Prompt to mark completed after download
-      setTimeout(() => {
-        completeOrderInDb(order.id, true);
-      }, 500);
     } catch (err: any) {
       console.error('Download error:', err);
       toast.error('Failed to download file.');
     }
+  };
+
+  const handleDownload = async (order: any) => {
+    openDownloadModal(order);
   };
 
   const handlePrint = async (order: any) => {
@@ -1210,6 +1209,7 @@ export function useDashboardViewModel() {
     openDownloadModal,
     closeDownloadModal,
     completeOrderInDb,
+    executeFileDownload,
 
     // Methods / Helpers
     getSplitShopName,

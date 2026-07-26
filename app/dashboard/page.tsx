@@ -138,7 +138,7 @@ export default function DashboardPage() {
           onClose={vm.closeDownloadModal}
           order={vm.downloadModalOrder}
           formatFilename={vm.formatFilename}
-          onConfirmDownload={vm.handleDownload}
+          onConfirmDownload={vm.executeFileDownload}
           onCompleteOrder={async (orderId: string) => {
             await vm.completeOrderInDb(orderId, true);
           }}
