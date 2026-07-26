@@ -1039,8 +1039,31 @@ export function useDashboardViewModel() {
             <iframe id="pdfFrame" src="${pdfBlobUrl}"></iframe>
           </div>
 
-          <!-- Post-Print Completion Popup Modal Card -->
-          <div id="completionModal" class="modal-overlay">
+          <!-- Pre-Print Requirements Modal Overlay -->
+          <div id="prePrintModal" class="modal-overlay active">
+            <div class="modal-card">
+              <h3>Job Requirements Summary</h3>
+              <p>Review customer print specifications before opening Chrome print menu.</p>
+              
+              <div class="modal-summary">
+                <div class="modal-summary-row"><span>Customer:</span> <strong>${safeCustomerName}</strong></div>
+                ${safeCustomerPhone ? `<div class="modal-summary-row"><span>Phone:</span> <strong>${safeCustomerPhone}</strong></div>` : ''}
+                <div class="modal-summary-row"><span>Document:</span> <strong>${safeFilename}</strong></div>
+                <div class="modal-summary-row"><span>Copies:</span> <strong>${order.quantity}</strong></div>
+                <div class="modal-summary-row"><span>Pages Selection:</span> <strong>${safePageSpec}</strong></div>
+                <div class="modal-summary-row"><span>Color Mode:</span> <strong>${escapeHtml((order.color_mode || 'bw').replace('_', ' ').toUpperCase())}</strong></div>
+                <div class="modal-summary-row"><span>Total Cost:</span> <strong style="color:#facc15;">₹${order.total_cost || 0}</strong></div>
+              </div>
+
+              <div class="modal-actions">
+                <button class="btn modal-btn-done" onclick="triggerPrint()">🖨️ Open Print Menu</button>
+                <button class="btn modal-btn-print" onclick="closeAndComplete()">Done / Complete</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Post-Print Completion Modal Overlay -->
+          <div id="postPrintModal" class="modal-overlay">
             <div class="modal-card">
               <h3>Print Menu Finished</h3>
               <p>Did the document print successfully?</p>
@@ -1060,7 +1083,8 @@ export function useDashboardViewModel() {
 
           <script>
             function triggerPrint() {
-              document.getElementById('completionModal').classList.remove('active');
+              document.getElementById('prePrintModal').classList.remove('active');
+              document.getElementById('postPrintModal').classList.remove('active');
               const frame = document.getElementById('pdfFrame');
               try {
                 frame.contentWindow.focus();
@@ -1074,8 +1098,9 @@ export function useDashboardViewModel() {
               triggerPrint();
             }
 
-            function showCompletionModal() {
-              document.getElementById('completionModal').classList.add('active');
+            function showPostPrintModal() {
+              document.getElementById('prePrintModal').classList.remove('active');
+              document.getElementById('postPrintModal').classList.add('active');
             }
 
             function closeAndComplete() {
@@ -1088,7 +1113,7 @@ export function useDashboardViewModel() {
             }
 
             window.addEventListener('afterprint', () => {
-              setTimeout(showCompletionModal, 300);
+              setTimeout(showPostPrintModal, 300);
             });
 
             window.addEventListener('beforeunload', () => {
@@ -1098,10 +1123,6 @@ export function useDashboardViewModel() {
                 }
               } catch(e) {}
             });
-
-            document.getElementById('pdfFrame').onload = () => {
-              setTimeout(triggerPrint, 600);
-            };
           </script>
         </body>
         </html>

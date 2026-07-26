@@ -41,7 +41,7 @@ export const LiveOrdersQueue = ({
   const nameParts = getSplitShopName(shopName);
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto w-full max-w-5xl print:hidden relative z-10 space-y-6">
+    <main className="flex-1 p-6 md:p-8 overflow-y-auto w-full max-w-full print:hidden relative z-10 space-y-6">
       {/* Subscription Alert Banner */}
       {subAlert?.type === 'warning' && (
         <div className={`border p-5 rounded-3xl shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-fade-in ${subAlert.colorClass}`}>

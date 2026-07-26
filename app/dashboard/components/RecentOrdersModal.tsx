@@ -33,8 +33,8 @@ export const RecentOrdersModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-xl w-full max-w-lg text-left space-y-5 animate-scale-in relative">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-2xl w-full max-w-2xl md:max-w-3xl text-left space-y-5 animate-scale-in relative">
         <button 
           onClick={onClose}
           className="absolute right-6 top-6 p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition border-none bg-transparent cursor-pointer"
@@ -54,7 +54,7 @@ export const RecentOrdersModal = ({
           </div>
         </div>
 
-        <div className="max-h-[60vh] overflow-y-auto space-y-3.5 pr-1">
+        <div className="max-h-[65vh] overflow-y-auto space-y-3.5 pr-1">
           {recentOrders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-center border border-dashed border-slate-200 rounded-2xl bg-slate-50 p-6">
               <CheckCircle className="w-10 h-10 text-slate-300 mb-2" />
@@ -74,14 +74,14 @@ export const RecentOrdersModal = ({
               return (
                 <div 
                   key={order.id}
-                  className="p-4 border border-slate-200 rounded-2xl bg-slate-50 hover:bg-white transition shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                  className="p-4 sm:p-5 border border-slate-200 rounded-2xl bg-slate-50/70 hover:bg-white transition shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4"
                 >
-                  <div className="space-y-1 flex-1">
-                    <div className="flex items-center space-x-2.5 flex-wrap">
-                      <h4 className="font-extrabold text-sm text-slate-950 truncate max-w-[240px]" title={formatFilename(order.file_path)}>
+                  <div className="space-y-1.5 flex-1 min-w-0">
+                    <div className="flex items-center space-x-2.5 flex-wrap gap-y-1">
+                      <h4 className="font-black text-sm md:text-base text-slate-950 truncate max-w-[320px] md:max-w-[420px]" title={formatFilename(order.file_path)}>
                         {formatFilename(order.file_path)}
                       </h4>
-                      <span className="text-[10px] font-mono font-black text-green-700 bg-green-50 px-2.5 py-0.5 rounded-full border border-green-200">
+                      <span className="text-[11px] font-mono font-black text-green-700 bg-green-50 px-2.5 py-0.5 rounded-full border border-green-200 shrink-0">
                         ⏳ {timerStr} left
                       </span>
                     </div>
