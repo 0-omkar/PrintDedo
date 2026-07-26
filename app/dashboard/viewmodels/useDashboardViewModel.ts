@@ -948,6 +948,7 @@ export function useDashboardViewModel() {
       const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '*';
       const safeFilename = escapeHtml(formatFilename(order.file_path));
       const safeCustomerName = escapeHtml(order.customer_name || 'Anonymous');
+      const safeCustomerPhone = escapeHtml(order.customer_phone || '');
       const safePageSpec = escapeHtml(pageSpecLabel);
       const safeOrderId = escapeHtml(order.id);
 
@@ -966,7 +967,7 @@ export function useDashboardViewModel() {
         }
       }, 30000);
 
-      // Write full topbar print viewer document into printWin with strict origin checking & HTML escaping
+      // Write responsive percentage layout print viewer with customer requirements & post-print modal card
       printWin.document.open();
       printWin.document.write(`
         <!DOCTYPE html>
@@ -974,32 +975,92 @@ export function useDashboardViewModel() {
         <head>
           <title>Printing ${safeFilename} - PrintDedo</title>
           <style>
-            body { margin:0; padding:0; background:#0f172a; font-family:-apple-system,BlinkMacSystemFont,sans-serif; height:100vh; display:flex; flex-direction:column; overflow:hidden; }
-            .topbar { background:#1e293b; padding:12px 24px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); }
-            .info h2 { margin:0; font-size:15px; color:#f8fafc; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; }
-            .info p { margin:3px 0 0 0; font-size:12px; color:#94a3b8; font-weight:600; }
-            .btn-group { display:flex; gap:12px; align-items:center; }
-            .btn { background:#facc15; color:#000; border:none; padding:9px 18px; font-weight:800; font-size:13px; border-radius:10px; cursor:pointer; transition: background 0.2s; }
-            .btn:hover { background:#eab308; }
-            .btn-close { background:#334155; color:#f8fafc; }
+            * { box-sizing: border-box; }
+            html, body { margin:0; padding:0; width:100%; height:100%; background:#0f172a; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#f8fafc; overflow:hidden; display:flex; flex-direction:column; }
+            
+            /* Responsive Percentage Topbar */
+            .topbar { background:#1e293b; width:100%; padding:1% 2.5%; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; gap:1.5%; box-shadow:0 4px 12px rgba(0,0,0,0.3); z-index:20; }
+            .info { flex:1; min-width:45%; }
+            .info h2 { margin:0; font-size:1.05rem; color:#f8fafc; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; word-break:break-all; }
+            
+            .req-badges { display:flex; flex-wrap:wrap; gap:0.4rem; margin-top:0.35rem; align-items:center; }
+            .badge { background:#334155; color:#cbd5e1; font-size:0.75rem; font-weight:700; padding:0.25rem 0.6rem; border-radius:0.5rem; border:1px solid #475569; display:inline-flex; align-items:center; gap:0.25rem; }
+            .badge-highlight { background:#854d0e; color:#fef08a; border-color:#a16207; }
+            
+            .btn-group { display:flex; gap:0.8rem; align-items:center; shrink:0; }
+            .btn { background:#facc15; color:#000; border:none; padding:0.6rem 1.3rem; font-weight:800; font-size:0.85rem; border-radius:0.6rem; cursor:pointer; transition:all 0.2s ease; display:inline-flex; align-items:center; gap:0.4rem; }
+            .btn:hover { background:#eab308; transform:translateY(-1px); }
+            .btn-close { background:#334155; color:#f8fafc; border:1px solid #475569; }
             .btn-close:hover { background:#475569; }
-            iframe { flex:1; width:100%; border:none; background:#525659; }
+            
+            /* Viewer Container */
+            .viewer-container { position:relative; flex:1; width:100%; height:90%; background:#525659; }
+            iframe { width:100%; height:100%; border:none; }
+            
+            /* Percentage Centered Modal Card */
+            .modal-overlay { position:fixed; inset:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.75); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; z-index:50; padding:2%; }
+            .modal-overlay.active { display:flex; animation:fadeIn 0.2s ease-out; }
+            
+            .modal-card { background:#1e293b; border:1px solid #334155; width:90%; max-width:440px; border-radius:1.25rem; padding:6%; box-shadow:0 20px 25px -5px rgba(0,0,0,0.5); text-align:center; color:#f8fafc; }
+            .modal-card h3 { margin:0 0 0.5rem 0; font-size:1.2rem; font-weight:800; text-transform:uppercase; color:#facc15; }
+            .modal-card p { margin:0 0 1.25rem 0; font-size:0.85rem; color:#94a3b8; font-weight:600; line-height:1.4; }
+            
+            .modal-summary { background:#0f172a; border:1px solid #334155; border-radius:0.85rem; padding:4%; margin-bottom:1.5rem; text-align:left; font-size:0.8rem; }
+            .modal-summary-row { display:flex; justify-content:space-between; margin-bottom:0.35rem; color:#cbd5e1; font-weight:600; }
+            .modal-summary-row strong { color:#f8fafc; }
+            
+            .modal-actions { display:flex; gap:0.75rem; justify-content:center; }
+            .modal-btn-print { background:#334155; color:#f8fafc; border:1px solid #475569; flex:1; }
+            .modal-btn-done { background:#facc15; color:#000; flex:1.2; }
+            
+            @keyframes fadeIn { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
           </style>
         </head>
         <body>
           <div class="topbar">
             <div class="info">
               <h2>🖨️ ${safeFilename}</h2>
-              <p>Customer: ${safeCustomerName} • ${safePageSpec}</p>
+              <div class="req-badges">
+                <span class="badge">👤 ${safeCustomerName}</span>
+                ${safeCustomerPhone ? `<span class="badge">📞 ${safeCustomerPhone}</span>` : ''}
+                <span class="badge">📋 Copies: ${order.quantity}</span>
+                <span class="badge">✂️ ${safePageSpec}</span>
+                <span class="badge">🎨 ${escapeHtml((order.color_mode || 'bw').replace('_', ' ').toUpperCase())}</span>
+                <span class="badge badge-highlight">₹${order.total_cost || 0}</span>
+              </div>
             </div>
             <div class="btn-group">
               <button class="btn" onclick="triggerPrint()">🖨️ Print Now</button>
-              <button class="btn btn-close" onclick="closeAndComplete()">Done / Complete Order</button>
+              <button class="btn btn-close" onclick="closeAndComplete()">Done / Complete</button>
             </div>
           </div>
-          <iframe id="pdfFrame" src="${pdfBlobUrl}"></iframe>
+
+          <div class="viewer-container">
+            <iframe id="pdfFrame" src="${pdfBlobUrl}"></iframe>
+          </div>
+
+          <!-- Post-Print Completion Popup Modal Card -->
+          <div id="completionModal" class="modal-overlay">
+            <div class="modal-card">
+              <h3>Print Menu Finished</h3>
+              <p>Did the document print successfully?</p>
+              
+              <div class="modal-summary">
+                <div class="modal-summary-row"><span>Customer:</span> <strong>${safeCustomerName}</strong></div>
+                <div class="modal-summary-row"><span>Requirements:</span> <strong>${order.quantity} Cop • ${safePageSpec}</strong></div>
+                <div class="modal-summary-row"><span>Total Cost:</span> <strong style="color:#facc15;">₹${order.total_cost || 0}</strong></div>
+              </div>
+
+              <div class="modal-actions">
+                <button class="btn modal-btn-print" onclick="reprint()">🖨️ Print Again</button>
+                <button class="btn modal-btn-done" onclick="closeAndComplete()">✅ Done / Complete</button>
+              </div>
+            </div>
+          </div>
+
           <script>
             function triggerPrint() {
+              document.getElementById('completionModal').classList.remove('active');
               const frame = document.getElementById('pdfFrame');
               try {
                 frame.contentWindow.focus();
@@ -1007,6 +1068,14 @@ export function useDashboardViewModel() {
               } catch(e) {
                 window.print();
               }
+            }
+
+            function reprint() {
+              triggerPrint();
+            }
+
+            function showCompletionModal() {
+              document.getElementById('completionModal').classList.add('active');
             }
 
             function closeAndComplete() {
@@ -1019,7 +1088,7 @@ export function useDashboardViewModel() {
             }
 
             window.addEventListener('afterprint', () => {
-              setTimeout(closeAndComplete, 400);
+              setTimeout(showCompletionModal, 300);
             });
 
             window.addEventListener('beforeunload', () => {
