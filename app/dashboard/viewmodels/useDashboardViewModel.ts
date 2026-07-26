@@ -939,22 +939,21 @@ export function useDashboardViewModel() {
       const processedPdfBytes = await slicePdfIfNeeded(rawBuffer, order.customer_name);
       const pdfBlobUrl = URL.createObjectURL(new Blob([new Uint8Array(processedPdfBytes)], { type: 'application/pdf' }));
 
-      let pageSpecLabel = 'All Pages';
+      const rawCustomerName = (order.customer_name || 'Anonymous').replace(/\s*\[[^\]]+\]/g, '').trim();
+
+      let rawPageSpec = 'All Pages';
       const pageMatch = (order.customer_name || '').match(/\[(?:Pages|All)\s+([^\]]+)\]/i);
       if (pageMatch && pageMatch[1]) {
-        const rawSpec = pageMatch[1].replace(/^Pages\s*/i, '').trim();
-        if (rawSpec.toLowerCase().startsWith('all')) {
-          pageSpecLabel = rawSpec;
-        } else {
-          pageSpecLabel = `Pages: ${rawSpec}`;
-        }
+        const clean = pageMatch[1].replace(/^Pages\s*/i, '').trim();
+        rawPageSpec = clean;
       }
 
       const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '*';
       const safeFilename = escapeHtml(formatFilename(order.file_path));
-      const safeCustomerName = escapeHtml(order.customer_name || 'Anonymous');
+      const safeCustomerName = escapeHtml(rawCustomerName || 'Anonymous');
       const safeCustomerPhone = escapeHtml(order.customer_phone || '');
-      const safePageSpec = escapeHtml(pageSpecLabel);
+      const safePageSpec = escapeHtml(rawPageSpec);
+      const safeColorMode = escapeHtml((order.color_mode || 'bw').replace('_', ' ').toUpperCase());
       const safeOrderId = escapeHtml(order.id);
 
       // 30-Second Stranded Tab Reminder
@@ -972,7 +971,7 @@ export function useDashboardViewModel() {
         }
       }, 30000);
 
-      // Write responsive percentage layout print viewer with customer requirements & post-print modal card
+      // Write White & Yellow theme print viewer with clean customer requirements & post-print modal card
       printWin.document.open();
       printWin.document.write(`
         <!DOCTYPE html>
@@ -981,43 +980,45 @@ export function useDashboardViewModel() {
           <title>Printing ${safeFilename} - PrintDedo</title>
           <style>
             * { box-sizing: border-box; }
-            html, body { margin:0; padding:0; width:100%; height:100%; background:#0f172a; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#f8fafc; overflow:hidden; display:flex; flex-direction:column; }
+            html, body { margin:0; padding:0; width:100%; height:100%; background:#f8fafc; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; color:#0f172a; overflow:hidden; display:flex; flex-direction:column; }
             
-            /* Responsive Percentage Topbar */
-            .topbar { background:#1e293b; width:100%; padding:1% 2.5%; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; border-bottom:1px solid #334155; gap:1.5%; box-shadow:0 4px 12px rgba(0,0,0,0.3); z-index:20; }
+            /* White & Yellow Topbar Header */
+            .topbar { background:#ffffff; width:100%; padding:0.8% 2.5%; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; border-bottom:1px solid #e2e8f0; gap:1.5%; box-shadow:0 2px 8px rgba(0,0,0,0.04); z-index:20; }
             .info { flex:1; min-width:45%; }
-            .info h2 { margin:0; font-size:1.05rem; color:#f8fafc; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; word-break:break-all; }
+            .info h2 { margin:0; font-size:1.05rem; color:#0f172a; font-weight:900; text-transform:uppercase; letter-spacing:0.3px; word-break:break-all; }
             
             .req-badges { display:flex; flex-wrap:wrap; gap:0.4rem; margin-top:0.35rem; align-items:center; }
-            .badge { background:#334155; color:#cbd5e1; font-size:0.75rem; font-weight:700; padding:0.25rem 0.6rem; border-radius:0.5rem; border:1px solid #475569; display:inline-flex; align-items:center; gap:0.25rem; }
-            .badge-highlight { background:#854d0e; color:#fef08a; border-color:#a16207; }
+            .badge { background:#f1f5f9; color:#334155; font-size:0.75rem; font-weight:700; padding:0.25rem 0.65rem; border-radius:0.6rem; border:1px solid #e2e8f0; display:inline-flex; align-items:center; gap:0.25rem; }
+            .badge-highlight { background:#fef9c3; color:#854d0e; border-color:#fde047; font-weight:800; }
             
             .btn-group { display:flex; gap:0.8rem; align-items:center; shrink:0; }
-            .btn { background:#facc15; color:#000; border:none; padding:0.6rem 1.3rem; font-weight:800; font-size:0.85rem; border-radius:0.6rem; cursor:pointer; transition:all 0.2s ease; display:inline-flex; align-items:center; gap:0.4rem; }
+            .btn { background:#facc15; color:#000; border:none; padding:0.65rem 1.4rem; font-weight:800; font-size:0.85rem; border-radius:0.75rem; cursor:pointer; transition:all 0.2s ease; display:inline-flex; align-items:center; gap:0.4rem; box-shadow:0 2px 4px rgba(250,204,21,0.25); }
             .btn:hover { background:#eab308; transform:translateY(-1px); }
-            .btn-close { background:#334155; color:#f8fafc; border:1px solid #475569; }
-            .btn-close:hover { background:#475569; }
+            .btn-close { background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; box-shadow:none; }
+            .btn-close:hover { background:#e2e8f0; color:#0f172a; }
             
-            /* Viewer Container */
-            .viewer-container { position:relative; flex:1; width:100%; height:90%; background:#525659; }
+            /* PDF Viewer Container */
+            .viewer-container { position:relative; flex:1; width:100%; height:90%; background:#cbd5e1; }
             iframe { width:100%; height:100%; border:none; }
             
-            /* Expanded Percentage Centered Modal Card */
-            .modal-overlay { position:fixed; inset:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.78); backdrop-filter:blur(5px); display:none; align-items:center; justify-content:center; z-index:50; padding:3%; }
+            /* White & Yellow Centered Modal Overlay Card */
+            .modal-overlay { position:fixed; inset:0; width:100%; height:100%; background:rgba(0, 0, 0, 0.45); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; z-index:50; padding:3%; }
             .modal-overlay.active { display:flex; animation:fadeIn 0.2s ease-out; }
             
-            .modal-card { background:#1e293b; border:1px solid #334155; width:92%; max-width:580px; border-radius:1.5rem; padding:4% 5%; box-shadow:0 25px 50px -12px rgba(0,0,0,0.6); text-align:center; color:#f8fafc; }
-            .modal-card h3 { margin:0 0 0.5rem 0; font-size:1.35rem; font-weight:800; text-transform:uppercase; color:#facc15; }
-            .modal-card p { margin:0 0 1.25rem 0; font-size:0.9rem; color:#94a3b8; font-weight:600; line-height:1.4; }
+            .modal-card { background:#ffffff; border:1px solid #e2e8f0; width:92%; max-width:580px; border-radius:1.5rem; padding:4% 5%; box-shadow:0 25px 50px -12px rgba(0,0,0,0.18); text-align:center; color:#0f172a; }
+            .modal-card h3 { margin:0 0 0.4rem 0; font-size:1.35rem; font-weight:900; text-transform:uppercase; color:#0f172a; letter-spacing:0.3px; }
+            .modal-card p { margin:0 0 1.25rem 0; font-size:0.88rem; color:#64748b; font-weight:600; line-height:1.4; }
             
-            .modal-summary { background:#0f172a; border:1px solid #334155; border-radius:1rem; padding:4% 5%; margin-bottom:1.5rem; text-align:left; font-size:0.88rem; }
-            .modal-summary-row { display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0; border-bottom:1px solid #1e293b; color:#cbd5e1; font-weight:600; }
+            .modal-summary { background:#f8fafc; border:1px solid #e2e8f0; border-radius:1rem; padding:4% 5%; margin-bottom:1.5rem; text-align:left; font-size:0.88rem; }
+            .modal-summary-row { display:flex; justify-content:space-between; align-items:center; padding:0.45rem 0; border-bottom:1px solid #e2e8f0; color:#475569; font-weight:600; }
             .modal-summary-row:last-child { border-bottom:none; }
-            .modal-summary-row strong { color:#f8fafc; word-break:break-all; }
+            .modal-summary-row strong { color:#0f172a; font-weight:800; word-break:break-all; }
             
             .modal-actions { display:flex; gap:0.85rem; justify-content:center; }
-            .modal-btn-print { background:#334155; color:#f8fafc; border:1px solid #475569; flex:1; padding:0.75rem 1.2rem; font-size:0.9rem; }
-            .modal-btn-done { background:#facc15; color:#000; flex:1.2; padding:0.75rem 1.2rem; font-size:0.9rem; }
+            .modal-btn-print { background:#f1f5f9; color:#334155; border:1px solid #cbd5e1; flex:1; padding:0.75rem 1.2rem; font-size:0.9rem; font-weight:800; border-radius:0.75rem; cursor:pointer; }
+            .modal-btn-print:hover { background:#e2e8f0; color:#0f172a; }
+            .modal-btn-done { background:#facc15; color:#000000; flex:1.2; padding:0.75rem 1.2rem; font-size:0.9rem; font-weight:900; border-radius:0.75rem; border:none; cursor:pointer; box-shadow:0 4px 12px rgba(250,204,21,0.3); }
+            .modal-btn-done:hover { background:#eab308; transform:translateY(-1px); }
             
             @keyframes fadeIn { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
           </style>
@@ -1031,7 +1032,7 @@ export function useDashboardViewModel() {
                 ${safeCustomerPhone ? `<span class="badge">📞 ${safeCustomerPhone}</span>` : ''}
                 <span class="badge">📋 Copies: ${order.quantity}</span>
                 <span class="badge">✂️ ${safePageSpec}</span>
-                <span class="badge">🎨 ${escapeHtml((order.color_mode || 'bw').replace('_', ' ').toUpperCase())}</span>
+                <span class="badge">🎨 ${safeColorMode}</span>
                 <span class="badge badge-highlight">₹${order.total_cost || 0}</span>
               </div>
             </div>
@@ -1057,8 +1058,8 @@ export function useDashboardViewModel() {
                 <div class="modal-summary-row"><span>Document:</span> <strong>${safeFilename}</strong></div>
                 <div class="modal-summary-row"><span>Copies:</span> <strong>${order.quantity}</strong></div>
                 <div class="modal-summary-row"><span>Pages Selection:</span> <strong>${safePageSpec}</strong></div>
-                <div class="modal-summary-row"><span>Color Mode:</span> <strong>${escapeHtml((order.color_mode || 'bw').replace('_', ' ').toUpperCase())}</strong></div>
-                <div class="modal-summary-row"><span>Total Cost:</span> <strong style="color:#facc15;">₹${order.total_cost || 0}</strong></div>
+                <div class="modal-summary-row"><span>Color Mode:</span> <strong>${safeColorMode}</strong></div>
+                <div class="modal-summary-row"><span>Total Cost:</span> <strong style="color:#ca8a04;">₹${order.total_cost || 0}</strong></div>
               </div>
 
               <div class="modal-actions">
@@ -1076,8 +1077,12 @@ export function useDashboardViewModel() {
               
               <div class="modal-summary">
                 <div class="modal-summary-row"><span>Customer:</span> <strong>${safeCustomerName}</strong></div>
-                <div class="modal-summary-row"><span>Requirements:</span> <strong>${order.quantity} Copies • ${safePageSpec}</strong></div>
-                <div class="modal-summary-row"><span>Total Cost:</span> <strong style="color:#facc15;">₹${order.total_cost || 0}</strong></div>
+                ${safeCustomerPhone ? `<div class="modal-summary-row"><span>Phone:</span> <strong>${safeCustomerPhone}</strong></div>` : ''}
+                <div class="modal-summary-row"><span>Document:</span> <strong>${safeFilename}</strong></div>
+                <div class="modal-summary-row"><span>Copies:</span> <strong>${order.quantity}</strong></div>
+                <div class="modal-summary-row"><span>Pages Selection:</span> <strong>${safePageSpec}</strong></div>
+                <div class="modal-summary-row"><span>Color Mode:</span> <strong>${safeColorMode}</strong></div>
+                <div class="modal-summary-row"><span>Total Cost:</span> <strong style="color:#ca8a04;">₹${order.total_cost || 0}</strong></div>
               </div>
 
               <div class="modal-actions">
