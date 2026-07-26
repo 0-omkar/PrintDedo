@@ -1093,30 +1093,31 @@ export function useDashboardViewModel() {
           </div>
 
           <script>
-            let printAttempted = false;
+            function showPostPrintModal() {
+              document.getElementById('prePrintModal').classList.remove('active');
+              const postModal = document.getElementById('postPrintModal');
+              if (postModal) postModal.classList.add('active');
+            }
 
             function triggerPrint() {
               document.getElementById('prePrintModal').classList.remove('active');
               document.getElementById('postPrintModal').classList.remove('active');
-              printAttempted = true;
 
-              const frame = document.getElementById('pdfFrame');
-              try {
-                frame.contentWindow.focus();
-                frame.contentWindow.print();
-              } catch(e) {
-                window.print();
-              }
+              setTimeout(() => {
+                const frame = document.getElementById('pdfFrame');
+                try {
+                  frame.contentWindow.focus();
+                  frame.contentWindow.print();
+                } catch(e) {
+                  window.print();
+                }
+                // Synchronous print call resumes right after Chrome dialog closes:
+                setTimeout(showPostPrintModal, 150);
+              }, 100);
             }
 
             function reprint() {
               triggerPrint();
-            }
-
-            function showPostPrintModal() {
-              if (!printAttempted) return;
-              document.getElementById('prePrintModal').classList.remove('active');
-              document.getElementById('postPrintModal').classList.add('active');
             }
 
             function closeAndComplete() {
@@ -1129,13 +1130,11 @@ export function useDashboardViewModel() {
             }
 
             window.addEventListener('afterprint', () => {
-              setTimeout(showPostPrintModal, 250);
+              setTimeout(showPostPrintModal, 150);
             });
 
             window.addEventListener('focus', () => {
-              if (printAttempted) {
-                setTimeout(showPostPrintModal, 300);
-              }
+              setTimeout(showPostPrintModal, 200);
             });
 
             window.addEventListener('beforeunload', () => {
