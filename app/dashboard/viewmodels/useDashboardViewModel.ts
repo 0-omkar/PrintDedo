@@ -853,7 +853,40 @@ export function useDashboardViewModel() {
   };
 
   const handlePrint = async (order: any) => {
-    // 1. Synchronously open popup tab to bypass popup blockers
+    const filePathLower = (order.file_path || '').toLowerCase();
+    const isPdf = order.mime_type ? order.mime_type === 'application/pdf' : filePathLower.endsWith('.pdf');
+
+    if (!isPdf) {
+      // Original direct download & print flow for PowerPoint, Word, Excel, and raw formats
+      try {
+        const { getPresignedDownloadUrl } = await import('@/lib/r2');
+        const presigned = await getPresignedDownloadUrl(order.file_path);
+        if (!presigned.success || !presigned.url) {
+          throw new Error(presigned.error || 'Failed to get download URL from R2.');
+        }
+
+        const a = document.createElement('a');
+        a.href = presigned.url;
+        a.download = formatFilename(order.file_path);
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        setTimeout(async () => {
+          const didPrint = window.confirm("File downloaded to your computer!\n\nClick OK after printing to mark as completed and move to Recents queue.");
+          if (didPrint) {
+            completeOrderInDb(order.id, false);
+          }
+        }, 500);
+      } catch (err: any) {
+        console.error('Non-PDF print error:', err);
+        toast.error('Failed to load file for printing.');
+      }
+      return;
+    }
+
+    // PDF Flow: Synchronously open popup tab to bypass popup blockers
     const printWin = window.open('about:blank', '_blank');
     if (!printWin) {
       toast.warning('Popup blocked — downloading instead.');
@@ -896,16 +929,6 @@ export function useDashboardViewModel() {
       const presigned = await getPresignedDownloadUrl(order.file_path);
       if (!presigned.success || !presigned.url) {
         throw new Error(presigned.error || 'Failed to get download URL from R2.');
-      }
-
-      const filePathLower = (order.file_path || '').toLowerCase();
-      const isPdf = order.mime_type ? order.mime_type === 'application/pdf' : filePathLower.endsWith('.pdf');
-
-      if (!isPdf) {
-        printWin.close();
-        toast.info('Non-PDF file — downloading for local printing.');
-        await handleDownload(order);
-        return;
       }
 
       const res = await fetch(presigned.url);

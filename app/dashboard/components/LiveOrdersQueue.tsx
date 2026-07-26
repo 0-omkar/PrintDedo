@@ -307,7 +307,7 @@ export const LiveOrdersQueue = ({
                 </div>
 
                 <div className="flex items-center justify-end space-x-2 shrink-0">
-                  {handleDownload && (
+                  {!isRawOfficeDoc && handleDownload && (
                     <button
                       onClick={() => handleDownload(order)}
                       title="Download file directly"

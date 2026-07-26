@@ -69,6 +69,7 @@ export const RecentOrdersModal = ({
               const m = Math.floor(totalSec / 60);
               const s = totalSec % 60;
               const timerStr = `${m}:${s < 10 ? '0' : ''}${s}`;
+              const isRawOfficeDoc = (order.file_path || '').toLowerCase().match(/\.(pptx|ppt|docx|doc|xlsx|xls)$/i);
 
               return (
                 <div 
@@ -95,7 +96,7 @@ export const RecentOrdersModal = ({
                   </div>
 
                   <div className="flex items-center space-x-2 shrink-0">
-                    {handleDownload && (
+                    {!isRawOfficeDoc && handleDownload && (
                       <button
                         onClick={() => handleDownload(order)}
                         title="Download file directly"
@@ -109,8 +110,8 @@ export const RecentOrdersModal = ({
                       onClick={() => handlePrint(order)}
                       className="bg-yellow-400 hover:bg-yellow-500 text-black font-bold px-4 py-2.5 rounded-xl text-xs transition flex justify-center items-center space-x-1.5 border-none cursor-pointer shadow-xs"
                     >
-                      <Printer className="w-4 h-4" />
-                      <span>Reprint</span>
+                      {isRawOfficeDoc ? <Download className="w-4 h-4" /> : <Printer className="w-4 h-4" />}
+                      <span>{isRawOfficeDoc ? 'Download & Print' : 'Reprint'}</span>
                     </button>
                   </div>
                 </div>
