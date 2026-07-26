@@ -942,7 +942,12 @@ export function useDashboardViewModel() {
       let pageSpecLabel = 'All Pages';
       const pageMatch = (order.customer_name || '').match(/\[(?:Pages|All)\s+([^\]]+)\]/i);
       if (pageMatch && pageMatch[1]) {
-        pageSpecLabel = `Pages: ${pageMatch[1]}`;
+        const rawSpec = pageMatch[1].replace(/^Pages\s*/i, '').trim();
+        if (rawSpec.toLowerCase().startsWith('all')) {
+          pageSpecLabel = rawSpec;
+        } else {
+          pageSpecLabel = `Pages: ${rawSpec}`;
+        }
       }
 
       const currentOrigin = typeof window !== 'undefined' ? window.location.origin : '*';
@@ -997,21 +1002,22 @@ export function useDashboardViewModel() {
             .viewer-container { position:relative; flex:1; width:100%; height:90%; background:#525659; }
             iframe { width:100%; height:100%; border:none; }
             
-            /* Percentage Centered Modal Card */
-            .modal-overlay { position:fixed; inset:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.75); backdrop-filter:blur(4px); display:none; align-items:center; justify-content:center; z-index:50; padding:2%; }
+            /* Expanded Percentage Centered Modal Card */
+            .modal-overlay { position:fixed; inset:0; width:100%; height:100%; background:rgba(15, 23, 42, 0.78); backdrop-filter:blur(5px); display:none; align-items:center; justify-content:center; z-index:50; padding:3%; }
             .modal-overlay.active { display:flex; animation:fadeIn 0.2s ease-out; }
             
-            .modal-card { background:#1e293b; border:1px solid #334155; width:90%; max-width:440px; border-radius:1.25rem; padding:6%; box-shadow:0 20px 25px -5px rgba(0,0,0,0.5); text-align:center; color:#f8fafc; }
-            .modal-card h3 { margin:0 0 0.5rem 0; font-size:1.2rem; font-weight:800; text-transform:uppercase; color:#facc15; }
-            .modal-card p { margin:0 0 1.25rem 0; font-size:0.85rem; color:#94a3b8; font-weight:600; line-height:1.4; }
+            .modal-card { background:#1e293b; border:1px solid #334155; width:92%; max-width:580px; border-radius:1.5rem; padding:4% 5%; box-shadow:0 25px 50px -12px rgba(0,0,0,0.6); text-align:center; color:#f8fafc; }
+            .modal-card h3 { margin:0 0 0.5rem 0; font-size:1.35rem; font-weight:800; text-transform:uppercase; color:#facc15; }
+            .modal-card p { margin:0 0 1.25rem 0; font-size:0.9rem; color:#94a3b8; font-weight:600; line-height:1.4; }
             
-            .modal-summary { background:#0f172a; border:1px solid #334155; border-radius:0.85rem; padding:4%; margin-bottom:1.5rem; text-align:left; font-size:0.8rem; }
-            .modal-summary-row { display:flex; justify-content:space-between; margin-bottom:0.35rem; color:#cbd5e1; font-weight:600; }
-            .modal-summary-row strong { color:#f8fafc; }
+            .modal-summary { background:#0f172a; border:1px solid #334155; border-radius:1rem; padding:4% 5%; margin-bottom:1.5rem; text-align:left; font-size:0.88rem; }
+            .modal-summary-row { display:flex; justify-content:space-between; align-items:center; padding:0.4rem 0; border-bottom:1px solid #1e293b; color:#cbd5e1; font-weight:600; }
+            .modal-summary-row:last-child { border-bottom:none; }
+            .modal-summary-row strong { color:#f8fafc; word-break:break-all; }
             
-            .modal-actions { display:flex; gap:0.75rem; justify-content:center; }
-            .modal-btn-print { background:#334155; color:#f8fafc; border:1px solid #475569; flex:1; }
-            .modal-btn-done { background:#facc15; color:#000; flex:1.2; }
+            .modal-actions { display:flex; gap:0.85rem; justify-content:center; }
+            .modal-btn-print { background:#334155; color:#f8fafc; border:1px solid #475569; flex:1; padding:0.75rem 1.2rem; font-size:0.9rem; }
+            .modal-btn-done { background:#facc15; color:#000; flex:1.2; padding:0.75rem 1.2rem; font-size:0.9rem; }
             
             @keyframes fadeIn { from { opacity:0; transform:scale(0.96); } to { opacity:1; transform:scale(1); } }
           </style>
@@ -1070,21 +1076,25 @@ export function useDashboardViewModel() {
               
               <div class="modal-summary">
                 <div class="modal-summary-row"><span>Customer:</span> <strong>${safeCustomerName}</strong></div>
-                <div class="modal-summary-row"><span>Requirements:</span> <strong>${order.quantity} Cop • ${safePageSpec}</strong></div>
+                <div class="modal-summary-row"><span>Requirements:</span> <strong>${order.quantity} Copies • ${safePageSpec}</strong></div>
                 <div class="modal-summary-row"><span>Total Cost:</span> <strong style="color:#facc15;">₹${order.total_cost || 0}</strong></div>
               </div>
 
               <div class="modal-actions">
                 <button class="btn modal-btn-print" onclick="reprint()">🖨️ Print Again</button>
-                <button class="btn modal-btn-done" onclick="closeAndComplete()">✅ Done / Complete</button>
+                <button class="btn modal-btn-done" onclick="closeAndComplete()">✅ Done / Complete Order</button>
               </div>
             </div>
           </div>
 
           <script>
+            let printAttempted = false;
+
             function triggerPrint() {
               document.getElementById('prePrintModal').classList.remove('active');
               document.getElementById('postPrintModal').classList.remove('active');
+              printAttempted = true;
+
               const frame = document.getElementById('pdfFrame');
               try {
                 frame.contentWindow.focus();
@@ -1099,6 +1109,7 @@ export function useDashboardViewModel() {
             }
 
             function showPostPrintModal() {
+              if (!printAttempted) return;
               document.getElementById('prePrintModal').classList.remove('active');
               document.getElementById('postPrintModal').classList.add('active');
             }
@@ -1113,7 +1124,13 @@ export function useDashboardViewModel() {
             }
 
             window.addEventListener('afterprint', () => {
-              setTimeout(showPostPrintModal, 300);
+              setTimeout(showPostPrintModal, 250);
+            });
+
+            window.addEventListener('focus', () => {
+              if (printAttempted) {
+                setTimeout(showPostPrintModal, 300);
+              }
             });
 
             window.addEventListener('beforeunload', () => {
