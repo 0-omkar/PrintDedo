@@ -6,6 +6,7 @@ import { ProfileEditModal } from './components/ProfileEditModal';
 import { AddonsModal } from './components/AddonsModal';
 import { PricingModal } from './components/PricingModal';
 import { ShopReviewsModal } from './components/ShopReviewsModal';
+import { DownloadOrderModal } from './components/DownloadOrderModal';
 import { PrintableQRPoster } from './components/PrintableQRPoster';
 import { useDashboardViewModel } from './viewmodels/useDashboardViewModel';
 import { BackgroundDecorations } from '@/components/BackgroundDecorations';
@@ -65,7 +66,7 @@ export default function DashboardPage() {
           formatFilename={vm.formatFilename}
         />
 
-        {/* Recents Queue Modal */}
+        {/* Recent Orders Modal */}
         <RecentOrdersModal 
           isOpen={vm.isRecentsModalOpen}
           onClose={() => vm.setIsRecentsModalOpen(false)}
@@ -76,14 +77,14 @@ export default function DashboardPage() {
         />
 
         {/* Shop Reviews Modal */}
-        <ShopReviewsModal 
+        <ShopReviewsModal
           isOpen={vm.isShopReviewsModalOpen}
           onClose={() => vm.setIsShopReviewsModalOpen(false)}
           reviews={vm.shopReviews}
           onDeleteReview={vm.handleDeleteShopReview}
         />
 
-        {/* Banner / Profile Edit Modal */}
+        {/* Shop Banner & Info Edit Modal */}
         <ProfileEditModal 
           isOpen={vm.isEditingBanner}
           onClose={() => vm.setIsEditingBanner(false)}
@@ -130,13 +131,25 @@ export default function DashboardPage() {
           setNewPricingColorDouble={vm.setNewPricingColorDouble}
           onSave={vm.handleSaveNewPricingModal}
         />
+
+        {/* Download & Print Requirements Modal */}
+        <DownloadOrderModal
+          isOpen={vm.isDownloadModalOpen}
+          onClose={vm.closeDownloadModal}
+          order={vm.downloadModalOrder}
+          formatFilename={vm.formatFilename}
+          onConfirmDownload={vm.handleDownload}
+          onCompleteOrder={async (orderId: string) => {
+            await vm.completeOrderInDb(orderId, true);
+          }}
+        />
       </div>
 
-      {/* Printable Poster view for QR Code */}
+      {/* Printable QR Code Template */}
       <PrintableQRPoster 
         userId={vm.userId || ''}
-        origin={vm.origin}
         shopName={vm.shopName}
+        origin={vm.origin}
       />
     </>
   );

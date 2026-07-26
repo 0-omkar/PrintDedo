@@ -42,6 +42,20 @@ export function useDashboardViewModel() {
   const [tempLocation, setTempLocation] = useState('');
   const [tempLogo, setTempLogo] = useState('');
 
+  // Download & Print Requirements Modal State
+  const [downloadModalOrder, setDownloadModalOrder] = useState<any | null>(null);
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+
+  const openDownloadModal = (order: any) => {
+    setDownloadModalOrder(order);
+    setIsDownloadModalOpen(true);
+  };
+
+  const closeDownloadModal = () => {
+    setIsDownloadModalOpen(false);
+    setDownloadModalOrder(null);
+  };
+
   // Local interactive settings state
   const [location, setLocation] = useState('MIT-WPU Campus, Pune');
   const [logo, setLogo] = useState('');
@@ -857,32 +871,7 @@ export function useDashboardViewModel() {
     const isPdf = order.mime_type ? order.mime_type === 'application/pdf' : filePathLower.endsWith('.pdf');
 
     if (!isPdf) {
-      // Original direct download & print flow for PowerPoint, Word, Excel, and raw formats
-      try {
-        const { getPresignedDownloadUrl } = await import('@/lib/r2');
-        const presigned = await getPresignedDownloadUrl(order.file_path);
-        if (!presigned.success || !presigned.url) {
-          throw new Error(presigned.error || 'Failed to get download URL from R2.');
-        }
-
-        const a = document.createElement('a');
-        a.href = presigned.url;
-        a.download = formatFilename(order.file_path);
-        a.target = '_blank';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-
-        setTimeout(async () => {
-          const didPrint = window.confirm("File downloaded to your computer!\n\nClick OK after printing to mark as completed and move to Recents queue.");
-          if (didPrint) {
-            completeOrderInDb(order.id, false);
-          }
-        }, 500);
-      } catch (err: any) {
-        console.error('Non-PDF print error:', err);
-        toast.error('Failed to load file for printing.');
-      }
+      openDownloadModal(order);
       return;
     }
 
@@ -1214,6 +1203,13 @@ export function useDashboardViewModel() {
     shopReviews,
     isShopReviewsModalOpen,
     setIsShopReviewsModalOpen,
+
+    // Download & Print Requirements Modal
+    downloadModalOrder,
+    isDownloadModalOpen,
+    openDownloadModal,
+    closeDownloadModal,
+    completeOrderInDb,
 
     // Methods / Helpers
     getSplitShopName,
