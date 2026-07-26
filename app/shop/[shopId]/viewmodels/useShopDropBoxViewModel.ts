@@ -21,8 +21,8 @@ export function useShopDropBoxViewModel(shopId: string) {
   // PDF Page Counting & Page Selection States
   const [pdfPageCount, setPdfPageCount] = useState<number | null>(null);
   const [pageSelectionMode, setPageSelectionMode] = useState<'all' | 'range' | 'custom'>('all');
-  const [fromPage, setFromPage] = useState<number>(1);
-  const [toPage, setToPage] = useState<number>(1);
+  const [fromPage, setFromPage] = useState<number | ''>('');
+  const [toPage, setToPage] = useState<number | ''>('');
   const [customPagesInput, setCustomPagesInput] = useState<string>('');
 
   // Custom addons state
@@ -109,6 +109,7 @@ export function useShopDropBoxViewModel(shopId: string) {
     if (!pdfPageCount) return 1;
     if (pageSelectionMode === 'all') return pdfPageCount;
     if (pageSelectionMode === 'range') {
+      if (typeof fromPage !== 'number' || typeof toPage !== 'number' || !fromPage || !toPage) return 0;
       if (fromPage > toPage) return 0;
       const count = toPage - fromPage + 1;
       return Math.max(0, Math.min(count, pdfPageCount));
@@ -120,9 +121,9 @@ export function useShopDropBoxViewModel(shopId: string) {
       for (const part of parts) {
         const trimmed = part.trim();
         if (trimmed.includes('-')) {
-          const [startStr, endStr] = trimmed.split('-');
-          const start = parseInt(startStr, 10);
-          const end = parseInt(endStr, 10);
+          const dashIdx = trimmed.indexOf('-');
+          const start = parseInt(trimmed.substring(0, dashIdx).trim(), 10);
+          const end = parseInt(trimmed.substring(dashIdx + 1).trim(), 10);
           if (!isNaN(start) && !isNaN(end)) {
             const s = Math.max(1, Math.min(start, end));
             const e = Math.min(pdfPageCount, Math.max(start, end));
@@ -140,6 +141,33 @@ export function useShopDropBoxViewModel(shopId: string) {
       return pageSet.size;
     }
     return pdfPageCount;
+  };
+
+  const validatePageSelection = (): { valid: boolean; message?: string } => {
+    if (!file || file.name.toLowerCase().match(/\.(pptx|ppt|docx|doc|xlsx|xls)$/i)) return { valid: true };
+
+    if (pageSelectionMode === 'range') {
+      if (typeof fromPage !== 'number' || !fromPage || typeof toPage !== 'number' || !toPage) {
+        return { valid: false, message: 'Please enter values for both "From Page" and "To Page".' };
+      }
+      if (fromPage > toPage) {
+        return { valid: false, message: '"From Page" cannot be greater than "To Page".' };
+      }
+      if (pdfPageCount && (fromPage > pdfPageCount || toPage > pdfPageCount)) {
+        return { valid: false, message: `Page numbers cannot exceed total document pages (${pdfPageCount}).` };
+      }
+    }
+
+    if (pageSelectionMode === 'custom') {
+      if (!customPagesInput.trim()) {
+        return { valid: false, message: 'Please specify custom page numbers (e.g. 1, 3, 5-8).' };
+      }
+      if (getSelectedPagesCount() === 0) {
+        return { valid: false, message: 'Invalid page selection. Please enter valid page numbers.' };
+      }
+    }
+
+    return { valid: true };
   };
 
   const selectedPagesCount = getSelectedPagesCount();
@@ -390,13 +418,20 @@ export function useShopDropBoxViewModel(shopId: string) {
   const handleAttachAnother = () => {
     if (!file) return;
 
+    const validation = validatePageSelection();
+    if (!validation.valid) {
+      setErrorMsg(validation.message || 'Please complete page selection.');
+      return;
+    }
+    setErrorMsg('');
+
     const newAttachedDoc: AttachedDoc = {
       id: Date.now().toString() + '_' + Math.random().toString(36).substring(2, 5),
       file,
       pdfPageCount,
       pageSelectionMode,
-      fromPage,
-      toPage,
+      fromPage: typeof fromPage === 'number' ? fromPage : 1,
+      toPage: typeof toPage === 'number' ? toPage : (pdfPageCount || 1),
       customPagesInput,
       selectedPagesCount,
       quantity,
@@ -411,6 +446,9 @@ export function useShopDropBoxViewModel(shopId: string) {
     setFile(null);
     setPdfPageCount(null);
     setPageSelectionMode('all');
+    setFromPage('');
+    setToPage('');
+    setCustomPagesInput('');
     setSelectedAddons([]);
     setQuantity(1);
     setPrintType('bw');
@@ -427,6 +465,13 @@ export function useShopDropBoxViewModel(shopId: string) {
       setErrorMsg('Please upload at least one PDF document.');
       return;
     }
+    if (file) {
+      const validation = validatePageSelection();
+      if (!validation.valid) {
+        setErrorMsg(validation.message || 'Please complete page selection.');
+        return;
+      }
+    }
     setErrorMsg('');
     setIsSummaryModalOpen(true);
   };
@@ -442,8 +487,8 @@ export function useShopDropBoxViewModel(shopId: string) {
         file,
         pdfPageCount,
         pageSelectionMode,
-        fromPage,
-        toPage,
+        fromPage: typeof fromPage === 'number' ? fromPage : 1,
+        toPage: typeof toPage === 'number' ? toPage : (pdfPageCount || 1),
         customPagesInput,
         selectedPagesCount,
         quantity,

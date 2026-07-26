@@ -224,20 +224,28 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
                       type="number"
                       min="1"
                       max={vm.pdfPageCount || undefined}
+                      placeholder="e.g. 1"
                       value={vm.fromPage}
-                      onChange={(e) => vm.setFromPage(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white"
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1);
+                        vm.setFromPage(val);
+                      }}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white focus:outline-none focus:border-yellow-400"
                     />
                   </div>
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">To Page</label>
                     <input
                       type="number"
-                      min={vm.fromPage}
+                      min="1"
                       max={vm.pdfPageCount || undefined}
+                      placeholder={vm.pdfPageCount ? `e.g. ${vm.pdfPageCount}` : 'e.g. 10'}
                       value={vm.toPage}
-                      onChange={(e) => vm.setToPage(Math.max(vm.fromPage, parseInt(e.target.value) || vm.fromPage))}
-                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white"
+                      onChange={(e) => {
+                        const val = e.target.value === '' ? '' : Math.max(1, parseInt(e.target.value) || 1);
+                        vm.setToPage(val);
+                      }}
+                      className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold bg-white focus:outline-none focus:border-yellow-400"
                     />
                   </div>
                 </div>
@@ -417,8 +425,8 @@ export default function ShopDropBoxPage({ params }: { params: Promise<{ shopId: 
           file={vm.file}
           pdfPageCount={vm.pdfPageCount}
           pageSelectionMode={vm.pageSelectionMode}
-          fromPage={vm.fromPage}
-          toPage={vm.toPage}
+          fromPage={typeof vm.fromPage === 'number' ? vm.fromPage : 1}
+          toPage={typeof vm.toPage === 'number' ? vm.toPage : (vm.pdfPageCount || 1)}
           customPagesInput={vm.customPagesInput}
           selectedPagesCount={vm.selectedPagesCount}
           quantity={vm.quantity}
