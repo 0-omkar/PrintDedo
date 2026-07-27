@@ -18,14 +18,6 @@ async function authorizeAdmin(payload?: AdminAuthPayload): Promise<boolean> {
     if (res.success) return true;
   }
 
-  // Fallback: Check environment variables for admin credentials on server
-  if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
-    const envEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-    const envPassword = (process.env.ADMIN_PASSWORD || '').trim();
-    const res = await verifyAdminCredentials(envEmail, envPassword);
-    if (res.success) return true;
-  }
-
   return false;
 }
 

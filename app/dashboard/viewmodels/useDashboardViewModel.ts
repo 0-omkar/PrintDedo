@@ -333,7 +333,13 @@ export function useDashboardViewModel() {
       if (storedReviews) setReviews(parseInt(storedReviews));
     }
     
-    let subscription: any;
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT' || !session) {
+        router.push('/login');
+      }
+    });
+
+    let realtimeChannel: any;
 
     const loadDashboard = async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
@@ -448,7 +454,7 @@ export function useDashboardViewModel() {
 
       fetchOrders(session.user.id);
 
-      subscription = supabase
+      realtimeChannel = supabase
         .channel(`orders_changes_${Date.now()}`)
         .on(
           'postgres_changes', 
@@ -463,8 +469,9 @@ export function useDashboardViewModel() {
     loadDashboard();
 
     return () => {
-      if (subscription) {
-        supabase.removeChannel(subscription);
+      authSub?.unsubscribe();
+      if (realtimeChannel) {
+        supabase.removeChannel(realtimeChannel);
       }
     };
   }, [router]);
