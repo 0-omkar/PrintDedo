@@ -618,14 +618,17 @@ export function useShopDropBoxViewModel(shopId: string) {
 
     // 1. Submit Shop Review to Supabase
     try {
-      await supabase.from('shop_reviews').insert({
+      const { error: shopErr } = await supabase.from('shop_reviews').insert({
         shop_id: shopId,
         name: customerName,
         rating: shopRating,
         comment: shopComment,
         created_at: new Date().toISOString()
       });
-    } catch (e) {}
+      if (shopErr) console.error('Supabase shop_reviews insert error:', shopErr);
+    } catch (e) {
+      console.error('Error submitting shop review to Supabase:', e);
+    }
 
     // Save to local storage for shop owner fallback
     const reviewsKey = `printdedo_reviews_list_${shopId}`;
@@ -654,14 +657,17 @@ export function useShopDropBoxViewModel(shopId: string) {
 
     // 2. Submit PrintDedo Platform Review to Supabase
     try {
-      await supabase.from('platform_reviews').insert({
+      const { error: platErr } = await supabase.from('platform_reviews').insert({
         name: customerName,
         shop_name: currentShopName,
         rating: platformRating,
         comment: platformComment,
         created_at: new Date().toISOString()
       });
-    } catch (e) {}
+      if (platErr) console.error('Supabase platform_reviews insert error:', platErr);
+    } catch (e) {
+      console.error('Error submitting platform review to Supabase:', e);
+    }
 
     // Save to local storage for admin fallback
     const platformKey = 'printdedo_platform_reviews';

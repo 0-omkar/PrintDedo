@@ -394,6 +394,7 @@ export function useDashboardViewModel() {
       } else {
         setShopName(shopData.store_name);
         setShopProfile(shopData);
+        fetchShopReviews(session.user.id);
         
         const primaryPhone = shopData.phone || shopData.mobile_number || '';
         const altPhone = shopData.alternate_phone || (typeof window !== 'undefined' ? localStorage.getItem('printdedo_alternate_phone') || '' : '');
