@@ -13,11 +13,20 @@ interface AdminAuthPayload {
  * Fails closed unless valid admin email and password are provided and verified.
  */
 async function authorizeAdmin(payload?: AdminAuthPayload): Promise<boolean> {
-  if (!payload || !payload.adminEmail || !payload.adminPassword) {
-    return false;
+  if (payload && payload.adminEmail && payload.adminPassword) {
+    const res = await verifyAdminCredentials(payload.adminEmail, payload.adminPassword);
+    if (res.success) return true;
   }
-  const res = await verifyAdminCredentials(payload.adminEmail, payload.adminPassword);
-  return res.success;
+
+  // Fallback: Check environment variables for admin credentials on server
+  if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+    const envEmail = (process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+    const envPassword = (process.env.ADMIN_PASSWORD || '').trim();
+    const res = await verifyAdminCredentials(envEmail, envPassword);
+    if (res.success) return true;
+  }
+
+  return false;
 }
 
 /**

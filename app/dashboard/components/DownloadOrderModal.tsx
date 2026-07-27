@@ -130,7 +130,7 @@ export const DownloadOrderModal = ({
             className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-black py-3 px-4 rounded-xl text-sm transition flex items-center justify-center space-x-2 border border-slate-300 cursor-pointer disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
-            <span>{downloading ? 'Downloading...' : downloaded ? 'Re-Download File' : 'Download File'}</span>
+            <span>{downloading ? 'Downloading...' : 'Download File'}</span>
           </button>
 
           <button

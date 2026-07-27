@@ -138,6 +138,8 @@ export function useAdminViewModel() {
           const parsed = JSON.parse(storedToken);
           // Check 24 hour session expiration
           if (parsed && parsed.authenticated && parsed.timestamp && (Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000)) {
+            if (parsed.email) setAdminEmail(parsed.email);
+            if (parsed.pass) setAdminPassword(parsed.pass);
             setIsAdminAuthenticated(true);
             fetchShops();
             fetchPlans();
@@ -165,7 +167,7 @@ export function useAdminViewModel() {
       const { verifyAdminCredentials } = await import('@/lib/adminAuth');
       const authResult = await verifyAdminCredentials(cleanInputEmail, cleanInputPassword);
       if (authResult.success) {
-        localStorage.setItem('printdedo_admin_token', JSON.stringify({ authenticated: true, email: cleanInputEmail, timestamp: Date.now() }));
+        localStorage.setItem('printdedo_admin_token', JSON.stringify({ authenticated: true, email: cleanInputEmail, pass: cleanInputPassword, timestamp: Date.now() }));
         setIsAdminAuthenticated(true);
         fetchShops();
         fetchPlans();
