@@ -49,28 +49,28 @@ export default function AdminPage() {
           onLogout={vm.handleAdminLogout}
         />
 
-        {/* 3 System Usage Metric Cards (Always visible at top of Admin Console) */}
+        {/* 3 Cloudflare WAS & R2 Storage Metric Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group">
             <div className="flex items-start justify-between">
               <div>
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Supabase Bandwidth</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Cloudflare R2 Bandwidth</span>
                 <h3 className="text-2xl font-black text-slate-950 mt-1.5 tracking-tight">{vm.formatBytes(vm.totalBandwidth)}</h3>
               </div>
-              <div className="bg-yellow-400/20 text-yellow-600 p-3 rounded-2xl group-hover:scale-110 transition-transform">
+              <div className="bg-amber-400/20 text-amber-600 p-3 rounded-2xl group-hover:scale-110 transition-transform">
                 <Wifi className="w-5 h-5" />
               </div>
             </div>
             <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-medium">Total Network Transferred</span>
-              <span className="bg-yellow-50 text-yellow-700 font-bold px-2 py-0.5 rounded-md border border-yellow-200/60">Live Usage</span>
+              <span className="text-slate-500 font-medium">Live Network Egress / Ingress</span>
+              <span className="bg-amber-50 text-amber-800 font-bold px-2 py-0.5 rounded-md border border-amber-200/60">Cloudflare R2</span>
             </div>
           </div>
 
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group">
             <div className="flex items-start justify-between">
               <div>
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Current Memory Used</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Cloudflare WAS / R2 Storage</span>
                 <h3 className="text-2xl font-black text-slate-950 mt-1.5 tracking-tight">{vm.formatBytes(vm.currentMemory)}</h3>
               </div>
               <div className="bg-blue-50 text-blue-600 p-3 rounded-2xl group-hover:scale-110 transition-transform border border-blue-100">
@@ -78,7 +78,7 @@ export default function AdminPage() {
               </div>
             </div>
             <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs">
-              <span className="text-slate-500 font-medium">Active File Footprint</span>
+              <span className="text-slate-500 font-medium">Active R2 Object Storage</span>
               <span className="bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-md border border-blue-200/60">{vm.shops.length} Shops Active</span>
             </div>
           </div>
@@ -86,7 +86,7 @@ export default function AdminPage() {
           <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between group">
             <div className="flex items-start justify-between">
               <div>
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Total Memory (GB-Hrs)</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Cloudflare Storage (GB-Hrs)</span>
                 <h3 className="text-2xl font-black text-slate-950 mt-1.5 tracking-tight">{vm.formatGBHours(vm.gbHoursUsed)}</h3>
               </div>
               <div className="bg-purple-50 text-purple-600 p-3 rounded-2xl group-hover:scale-110 transition-transform border border-purple-100">
@@ -95,7 +95,7 @@ export default function AdminPage() {
             </div>
             <div className="mt-5 pt-3.5 border-t border-slate-100 flex items-center justify-between text-xs">
               <span className="text-slate-500 font-medium">Accumulated GB × Time</span>
-              <span className="bg-purple-50 text-purple-700 font-bold px-2 py-0.5 rounded-md border border-purple-200/60">Cloud Metric</span>
+              <span className="bg-purple-50 text-purple-700 font-bold px-2 py-0.5 rounded-md border border-purple-200/60">R2 Bucket Metric</span>
             </div>
           </div>
         </div>
@@ -125,6 +125,8 @@ export default function AdminPage() {
           setActiveView={vm.setActiveView}
           shopName={vm.shopName}
           setShopName={vm.setShopName}
+          phone={vm.phone}
+          setPhone={vm.setPhone}
           email={vm.email}
           setEmail={vm.setEmail}
           password={vm.password}

@@ -1,4 +1,4 @@
-import { ArrowLeft, Loader2, UserPlus } from 'lucide-react';
+import { ArrowLeft, Loader2, UserPlus, Phone } from 'lucide-react';
 import { ActiveView, PlanItem } from '../types';
 
 interface RegisterShopTabProps {
@@ -6,6 +6,8 @@ interface RegisterShopTabProps {
   setActiveView: (view: ActiveView) => void;
   shopName: string;
   setShopName: (val: string) => void;
+  phone: string;
+  setPhone: (val: string) => void;
   email: string;
   setEmail: (val: string) => void;
   password: string;
@@ -26,6 +28,8 @@ export const RegisterShopTab = ({
   setActiveView,
   shopName,
   setShopName,
+  phone,
+  setPhone,
   email,
   setEmail,
   password,
@@ -59,7 +63,7 @@ export const RegisterShopTab = ({
           </div>
           <div>
             <h2 className="text-xl font-black text-slate-950 uppercase tracking-tight">Register New Xerox Shop</h2>
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Onboard shop owner & provision initial subscription</p>
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">Onboard shop owner &amp; provision initial subscription</p>
           </div>
         </div>
 
@@ -79,12 +83,27 @@ export const RegisterShopTab = ({
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Store / Shop Name</label>
             <input 
               type="text" 
-              placeholder="e.g. Ambika Copies & Prints" 
+              placeholder="e.g. Ambika Copies &amp; Prints" 
               value={shopName} 
               onChange={(e) => setShopName(e.target.value)} 
               className="w-full p-3.5 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm font-semibold bg-slate-50 focus:bg-white" 
               required
               maxLength={100}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+              <Phone className="w-3.5 h-3.5 text-slate-400" />
+              <span>Owner Mobile Number</span>
+            </label>
+            <input 
+              type="tel" 
+              placeholder="e.g. +91 98765 43210" 
+              value={phone} 
+              onChange={(e) => setPhone(e.target.value)} 
+              className="w-full p-3.5 border border-slate-200 rounded-xl text-slate-900 focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm font-semibold bg-slate-50 focus:bg-white" 
+              maxLength={20}
             />
           </div>
 

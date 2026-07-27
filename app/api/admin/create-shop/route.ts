@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   try {
     const authHeader = request.headers.get('x-admin-auth');
     const body = await request.json();
-    const { email, password, store_name, selected_plan_id, custom_months, adminEmail, adminPassword } = body;
+    const { email, password, store_name, phone, selected_plan_id, custom_months, adminEmail, adminPassword } = body;
 
     let isAuthorized = false;
 
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       email: email.trim(),
       password,
       email_confirm: true,
-      user_metadata: { store_name: store_name.trim() }
+      user_metadata: { store_name: store_name.trim(), phone: phone ? phone.trim() : '' }
     });
 
     if (authError) {
@@ -62,6 +62,7 @@ export async function POST(request: Request) {
       const { error: shopError } = await supabaseAdmin.from('shops').upsert({
         id: authData.user.id,
         store_name: store_name.trim(),
+        phone: phone ? phone.trim() : null,
         subscription_expires_at: expiresAt.toISOString(),
         subscription_plan_name: planName
       });

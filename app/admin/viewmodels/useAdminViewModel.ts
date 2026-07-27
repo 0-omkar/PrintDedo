@@ -26,6 +26,7 @@ export function useAdminViewModel() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [shopName, setShopName] = useState('');
+  const [phone, setPhone] = useState('');
   const [selectedPlan, setSelectedPlan] = useState<string>('free_trial');
   const [customMonths, setCustomMonths] = useState<string>('1');
   const [registerLoading, setRegisterLoading] = useState(false);
@@ -387,6 +388,7 @@ export function useAdminViewModel() {
           email: email.trim(),
           password,
           store_name: shopName.trim(),
+          phone: phone.trim(),
           selected_plan_id: selectedPlan,
           custom_months: customMonths,
           adminEmail,
@@ -403,6 +405,7 @@ export function useAdminViewModel() {
       setEmail('');
       setPassword('');
       setShopName('');
+      setPhone('');
       setSelectedPlan('free_trial');
       setCustomMonths('1');
       fetchShops();
@@ -656,6 +659,8 @@ export function useAdminViewModel() {
     setPassword,
     shopName,
     setShopName,
+    phone,
+    setPhone,
     selectedPlan,
     setSelectedPlan,
     customMonths,

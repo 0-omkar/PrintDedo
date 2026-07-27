@@ -1,4 +1,4 @@
-import { Database, UserPlus, CreditCard, ChevronRight, Search, ArrowUpDown, Loader2, HardDrive, Trash2, ArrowLeft } from 'lucide-react';
+import { Database, UserPlus, CreditCard, ChevronRight, Search, ArrowUpDown, Loader2, HardDrive, Trash2, ArrowLeft, Phone } from 'lucide-react';
 import { ActiveView, ShopItem, PlanItem, StorageMetrics } from '../types';
 
 interface ShopsOverviewTabProps {
@@ -272,7 +272,12 @@ export const ShopsOverviewTab = ({
                       
                       <p className="text-[10px] text-slate-400 font-bold font-mono tracking-wider">{shop.id}</p>
                       
-                      <div className="text-xs text-slate-500 font-semibold pt-1">
+                      <div className="flex items-center space-x-2 bg-amber-50 text-amber-900 border border-amber-200/80 px-2.5 py-1 rounded-lg text-xs font-extrabold w-fit my-1.5">
+                        <Phone className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>Owner Mobile: {shop.phone || shop.mobile_number || shop.shop_phone || 'Not Registered'}</span>
+                      </div>
+
+                      <div className="text-xs text-slate-500 font-semibold pt-0.5">
                         Plan: <span className="text-slate-900 font-bold">{shop.subscription_plan_name || 'Free Trial'}</span> 
                         {shop.subscription_expires_at && ` (Expires: ${new Date(shop.subscription_expires_at).toLocaleDateString()})`}
                       </div>
@@ -280,23 +285,23 @@ export const ShopsOverviewTab = ({
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs font-semibold text-slate-500">
                         <span className="bg-slate-100 px-2.5 py-0.5 rounded text-[11px]">UPI: {shop.upi_id || 'Not Set'}</span>
                         <span>•</span>
-                        <span>B&W: ₹{shop.pricing_bw}/₹{shop.pricing_bw_double}</span>
+                        <span>B&amp;W: ₹{shop.pricing_bw}/₹{shop.pricing_bw_double}</span>
                         <span>•</span>
                         <span>Color: ₹{shop.pricing_color}/₹{shop.pricing_color_double}</span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-                      <div className="flex items-center gap-3.5 bg-slate-50 border border-slate-200/60 p-4 rounded-2xl shrink-0">
-                        <HardDrive className="w-6 h-6 text-slate-400" />
+                      <div className="flex items-center gap-3.5 bg-amber-50/50 border border-amber-200/60 p-4 rounded-2xl shrink-0">
+                        <HardDrive className="w-6 h-6 text-amber-600" />
                         <div className="text-left space-y-1">
                           <div className="flex items-center space-x-2">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">CURRENT:</span>
+                            <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block">CLOUDFLARE R2:</span>
                             <span className="text-xs font-black text-slate-900">{formatSize(shopMetrics.current)}</span>
                           </div>
                           <div className="flex items-center space-x-2">
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">LAST 24H:</span>
-                            <span className="text-xs font-black text-yellow-600">{formatSize(shopMetrics.daily)}</span>
+                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">LAST 24H:</span>
+                            <span className="text-xs font-black text-amber-600">{formatSize(shopMetrics.daily)}</span>
                           </div>
                         </div>
                       </div>

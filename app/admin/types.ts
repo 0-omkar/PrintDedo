@@ -22,6 +22,9 @@ export interface ShopItem {
   id: string;
   store_name: string;
   created_at: string;
+  phone?: string;
+  mobile_number?: string;
+  shop_phone?: string;
   pricing_bw?: number;
   pricing_bw_double?: number;
   pricing_color?: number;
