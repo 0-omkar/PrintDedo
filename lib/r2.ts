@@ -81,6 +81,7 @@ export async function getPresignedUploadUrl(fileName: string) {
     const command = new PutObjectCommand({
       Bucket: bucketName,
       Key: fileName,
+      ContentType: 'application/octet-stream',
     });
 
     const url = await getSignedUrl(s3Client, command, { expiresIn: 600 });

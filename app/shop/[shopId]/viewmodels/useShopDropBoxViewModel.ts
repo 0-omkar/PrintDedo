@@ -522,11 +522,15 @@ export function useShopDropBoxViewModel(shopId: string) {
           const presigned = await getPresignedUploadUrl(fileName);
 
           if (presigned.success && presigned.url) {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 45000);
             const uploadRes = await fetch(presigned.url, {
               method: 'PUT',
               body: encryptedBlob,
               headers: { 'Content-Type': 'application/octet-stream' },
+              signal: controller.signal,
             });
+            clearTimeout(timeoutId);
 
             if (uploadRes.ok) {
               uploadedSuccessfully = true;

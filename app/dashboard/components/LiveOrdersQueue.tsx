@@ -57,18 +57,20 @@ export const LiveOrdersQueue = ({
   return (
     <main className="flex-1 flex flex-col h-screen max-h-screen p-4 sm:p-6 md:p-8 overflow-y-auto md:overflow-hidden w-full max-w-full print:hidden relative z-10 space-y-4 sm:space-y-6">
       
-      {/* Mobile Top Header: 3-lines menu icon in circle + PrintDedo logo redirecting to landing page */}
-      <div className="shrink-0 flex md:hidden items-center justify-between bg-white border border-slate-200 rounded-3xl p-3 px-4 shadow-2xs w-full select-none">
+      {/* Mobile Top Header: 3-lines menu icon on left, PrintDedo logo size lg centered */}
+      <div className="shrink-0 relative flex md:hidden items-center justify-center bg-white border border-slate-200 rounded-3xl p-3 px-4 shadow-2xs w-full min-h-[68px] select-none">
         <button
           type="button"
           onClick={onToggleMobileSidebar}
-          className="w-10 h-10 rounded-full border border-slate-200 bg-slate-50 hover:bg-amber-50 hover:border-amber-400 active:scale-95 text-slate-800 flex items-center justify-center transition cursor-pointer shadow-2xs shrink-0"
+          className="absolute left-4 w-10 h-10 rounded-full border border-slate-200 bg-slate-50 hover:bg-amber-50 hover:border-amber-400 active:scale-95 text-slate-800 flex items-center justify-center transition cursor-pointer shadow-2xs shrink-0 z-10"
           title="Open Menu Sidebar"
         >
           <Menu className="w-5 h-5 text-slate-900" />
         </button>
 
-        <BrandLogo size="sm" href="/" showSubtitle={false} />
+        <div className="flex items-center justify-center">
+          <BrandLogo size="lg" href="/" showSubtitle={false} />
+        </div>
       </div>
       {/* Subscription Alert Banner */}
       {subAlert?.type === 'warning' && (
@@ -199,22 +201,24 @@ export const LiveOrdersQueue = ({
       <div className="flex-1 flex flex-col min-h-0 bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-4 overflow-hidden">
         
         {/* Table Header Controls */}
-        <div className="shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
-          <div className="flex items-center space-x-3">
-            <h1 className="text-2xl font-black tracking-tight text-slate-950">Live Queue</h1>
-            <span className="bg-amber-100 text-amber-800 text-xs font-black px-3 py-1 rounded-full border border-amber-200/60">
+        <div className="shrink-0 flex items-center justify-between gap-3 pb-2 w-full select-none">
+          <div className="flex items-center space-x-2.5">
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-950">Live Queue</h1>
+            <span className="bg-amber-100 text-amber-900 text-xs font-black px-2.5 py-0.5 rounded-full border border-amber-300">
               {orders.length}
             </span>
           </div>
 
-          <div className="flex items-center space-x-3">
+          {/* Segmented Control for Recents on the Right */}
+          <div className="flex items-center bg-slate-100/90 p-1 rounded-2xl border border-slate-200 shadow-2xs shrink-0">
             <button
+              type="button"
               onClick={onOpenRecents}
-              className="flex items-center space-x-2 text-xs font-extrabold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-3.5 py-2 rounded-xl transition cursor-pointer"
+              className="flex items-center space-x-1.5 text-xs font-extrabold text-slate-800 bg-white hover:bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-xl shadow-2xs transition cursor-pointer active:scale-95"
             >
-              <CheckCircle className="w-4 h-4 text-green-600" />
+              <CheckCircle className="w-4 h-4 text-green-600 shrink-0" />
               <span>Recents</span>
-              <span className="bg-green-200 text-green-800 text-[10px] font-black px-2.5 py-0.5 rounded-full">
+              <span className="bg-green-100 text-green-800 text-[10px] font-black px-2 py-0.5 rounded-full border border-green-200">
                 {recentOrdersCount}
               </span>
             </button>
