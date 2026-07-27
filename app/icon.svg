@@ -1,0 +1,32 @@
+<svg viewBox="0 0 500 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="pSwoopGrad" x1="50" y1="50" x2="450" y2="350" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#f59e0b" />
+      <stop offset="60%" stop-color="#facc15" />
+      <stop offset="100%" stop-color="#fbbf24" />
+    </linearGradient>
+  </defs>
+  <!-- Golden/Yellow P Swoop in Background -->
+  <path d="M 120 40 L 330 40 C 420 40 460 110 460 190 C 460 270 410 330 330 330 L 340 240 C 370 240 385 210 385 190 C 385 150 360 115 320 115 L 120 115 Z" fill="url(#pSwoopGrad)" />
+  <path d="M 40 210 C 40 190 55 175 75 175 L 105 175 C 125 175 140 190 140 210 L 140 435 C 140 455 125 470 105 470 L 75 470 C 55 470 40 455 40 435 Z" fill="#1e293b" />
+  
+  <!-- Dark Printer Main Body -->
+  <rect x="90" y="240" width="290" height="150" rx="35" fill="#1e293b" />
+  <circle cx="310" cy="295" r="8" fill="#ffffff" />
+  <circle cx="338" cy="295" r="8" fill="#ffffff" />
+  
+  <!-- Document Feeding in from top -->
+  <path d="M 155 110 L 315 110 L 315 240 L 155 240 Z" fill="#ffffff" stroke="#1e293b" stroke-width="12" stroke-linejoin="round" />
+  <line x1="190" y1="145" x2="280" y2="145" stroke="#1e293b" stroke-width="8" stroke-linecap="round" />
+  <line x1="190" y1="175" x2="280" y2="175" stroke="#1e293b" stroke-width="8" stroke-linecap="round" />
+  <line x1="190" y1="205" x2="250" y2="205" stroke="#1e293b" stroke-width="8" stroke-linecap="round" />
+
+  <!-- Paper Slot Out -->
+  <path d="M 140 330 L 330 330 L 310 440 L 160 440 Z" fill="#ffffff" stroke="#1e293b" stroke-width="10" stroke-linejoin="round" />
+  
+  <!-- CMYK Color Paper Output -->
+  <path d="M 162 360 L 198 360 L 188 435 L 168 435 Z" fill="#06b6d4" />
+  <path d="M 200 360 L 236 360 L 230 435 L 190 435 Z" fill="#ec4899" />
+  <path d="M 238 360 L 274 360 L 272 435 L 232 435 Z" fill="#facc15" />
+  <path d="M 276 360 L 308 360 L 308 435 L 274 435 Z" fill="#1e293b" />
+</svg>

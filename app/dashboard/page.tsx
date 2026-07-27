@@ -45,6 +45,7 @@ export default function DashboardPage() {
         {/* Main Content Area: Live Queue */}
         <LiveOrdersQueue 
           shopName={vm.shopName}
+          shopPhone={vm.shopPhone}
           location={vm.location}
           logo={vm.logo}
           rating={vm.rating}
@@ -55,6 +56,7 @@ export default function DashboardPage() {
           getSubscriptionAlert={vm.getSubscriptionAlert}
           onOpenProfileEdit={() => {
             vm.setTempShopName(vm.shopName);
+            vm.setTempPhone(vm.shopPhone);
             vm.setTempLocation(vm.location);
             vm.setTempLogo(vm.logo);
             vm.setIsEditingBanner(true);
@@ -90,6 +92,8 @@ export default function DashboardPage() {
           onClose={() => vm.setIsEditingBanner(false)}
           tempShopName={vm.tempShopName}
           setTempShopName={vm.setTempShopName}
+          tempPhone={vm.tempPhone}
+          setTempPhone={vm.setTempPhone}
           tempLocation={vm.tempLocation}
           setTempLocation={vm.setTempLocation}
           tempLogo={vm.tempLogo}

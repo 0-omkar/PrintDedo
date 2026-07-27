@@ -14,8 +14,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "",
-  description: "The ultimate multi-tenant print-queue system for modern Xerox shops.",
+  title: "PrintDeDo - Less Confusion. More Printing.",
+  description: "PrintDeDo replaces scattered WhatsApp print requests into a structured, trackable workflow for modern print shops.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({

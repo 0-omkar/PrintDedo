@@ -39,8 +39,10 @@ export function useDashboardViewModel() {
   // Editing Banner States
   const [isEditingBanner, setIsEditingBanner] = useState(false);
   const [tempShopName, setTempShopName] = useState('');
+  const [tempPhone, setTempPhone] = useState('');
   const [tempLocation, setTempLocation] = useState('');
   const [tempLogo, setTempLogo] = useState('');
+  const [shopPhone, setShopPhone] = useState('+91 9876543210');
 
   // Download & Print Requirements Modal State
   const [downloadModalOrder, setDownloadModalOrder] = useState<any | null>(null);
@@ -390,6 +392,10 @@ export function useDashboardViewModel() {
       } else {
         setShopName(shopData.store_name);
         setShopProfile(shopData);
+        
+        const phoneVal = shopData.phone || shopData.mobile_number || localStorage.getItem('printdedo_shop_phone') || '+91 9876543210';
+        setShopPhone(phoneVal);
+        setTempPhone(phoneVal);
         if (shopData.pricing_bw !== null && shopData.pricing_bw !== undefined) {
           setPricingBwSingle(shopData.pricing_bw.toString());
         }
@@ -666,15 +672,25 @@ export function useDashboardViewModel() {
   const handleSaveBannerSettings = async () => {
     setSaving(true);
     try {
-      if (tempShopName !== shopName && userId) {
-        const { error } = await supabase
-          .from('shops')
-          .update({ store_name: tempShopName })
-          .eq('id', userId);
-        if (error) throw error;
+      if (userId) {
+        const updateObj: any = {};
+        if (tempShopName !== shopName) updateObj.store_name = tempShopName;
+        if (tempPhone !== shopPhone) updateObj.phone = tempPhone;
+
+        if (Object.keys(updateObj).length > 0) {
+          const { error } = await supabase
+            .from('shops')
+            .update(updateObj)
+            .eq('id', userId);
+          if (error) console.error('Supabase shop update info:', error);
+        }
         setShopName(tempShopName);
+        setShopPhone(tempPhone);
       }
       
+      localStorage.setItem('printdedo_shop_phone', tempPhone);
+      setShopPhone(tempPhone);
+
       localStorage.setItem('printdedo_location', tempLocation);
       setLocation(tempLocation);
       
@@ -682,6 +698,7 @@ export function useDashboardViewModel() {
       setLogo(tempLogo);
       
       setIsEditingBanner(false);
+      toast.success('Shop profile updated successfully!');
     } catch (err) {
       console.error(err);
       toast.error('Failed to save shop details.');
@@ -1191,6 +1208,9 @@ export function useDashboardViewModel() {
     setIsEditingBanner,
     tempShopName,
     setTempShopName,
+    shopPhone,
+    tempPhone,
+    setTempPhone,
     tempLocation,
     setTempLocation,
     tempLogo,

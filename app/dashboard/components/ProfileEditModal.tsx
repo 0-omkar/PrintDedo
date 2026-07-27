@@ -1,11 +1,13 @@
 import Link from 'next/link';
-import { Printer, Upload, X } from 'lucide-react';
+import { Printer, Upload, X, Phone } from 'lucide-react';
 
 interface ProfileEditModalProps {
   isOpen: boolean;
   onClose: () => void;
   tempShopName: string;
   setTempShopName: (name: string) => void;
+  tempPhone: string;
+  setTempPhone: (phone: string) => void;
   tempLocation: string;
   setTempLocation: (loc: string) => void;
   tempLogo: string;
@@ -19,6 +21,8 @@ export const ProfileEditModal = ({
   onClose,
   tempShopName,
   setTempShopName,
+  tempPhone,
+  setTempPhone,
   tempLocation,
   setTempLocation,
   tempLogo,
@@ -29,7 +33,7 @@ export const ProfileEditModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 backdrop-blur-xs">
       <div className="bg-white rounded-3xl p-8 max-w-md w-full border border-slate-200 shadow-xl relative animate-in fade-in zoom-in-95 duration-150">
         <button 
           onClick={onClose}
@@ -47,8 +51,20 @@ export const ProfileEditModal = ({
               type="text" 
               value={tempShopName}
               onChange={(e) => setTempShopName(e.target.value)}
-              className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 focus:outline-none text-slate-900 text-sm font-medium"
+              className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:outline-none text-slate-900 text-sm font-medium"
               maxLength={100}
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Shop Mobile / Phone Number</label>
+            <input 
+              type="text" 
+              placeholder="e.g. +91 9876543210"
+              value={tempPhone}
+              onChange={(e) => setTempPhone(e.target.value)}
+              className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:outline-none text-slate-900 text-sm font-medium"
+              maxLength={30}
             />
           </div>
 
@@ -58,7 +74,7 @@ export const ProfileEditModal = ({
               type="text" 
               value={tempLocation}
               onChange={(e) => setTempLocation(e.target.value)}
-              className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 focus:outline-none text-slate-900 text-sm font-medium"
+              className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-400 focus:border-amber-400 focus:outline-none text-slate-900 text-sm font-medium"
               maxLength={150}
             />
           </div>
@@ -99,48 +115,29 @@ export const ProfileEditModal = ({
             {tempLogo && (
               <button 
                 type="button" 
-                onClick={() => setTempLogo('')} 
-                className="text-xs text-red-500 mt-2 hover:underline block bg-transparent border-none cursor-pointer"
+                onClick={() => setTempLogo('')}
+                className="mt-2 text-xs text-red-500 hover:text-red-700 font-medium border-none bg-transparent cursor-pointer"
               >
-                Clear custom logo (use default copier icon)
+                Remove Logo
               </button>
             )}
           </div>
-
-          {/* Current Subscription Status */}
-          <div className="pt-4 border-t border-slate-150">
-            <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Subscription status</label>
-            <div className="flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200/65">
-              <div className="text-left space-y-0.5">
-                <span className={`text-xs font-black uppercase tracking-tight ${getSubStatusLabel().isExpired ? 'text-red-600' : 'text-green-600'}`}>
-                  {getSubStatusLabel().isExpired ? 'Expired' : 'Active'}
-                </span>
-                <span className="block text-[10px] text-slate-500 font-bold leading-normal">
-                  {getSubStatusLabel().text}
-                </span>
-              </div>
-              <Link 
-                href="/renew" 
-                className="bg-yellow-400 text-black font-bold px-3.5 py-2 rounded-xl hover:bg-yellow-500 transition text-xs shrink-0 cursor-pointer shadow-sm border-none text-center"
-              >
-                Renew
-              </Link>
-            </div>
-          </div>
         </div>
 
-        <div className="flex items-center justify-end space-x-3 mt-8">
+        <div className="mt-8 flex justify-end space-x-3">
           <button 
+            type="button" 
             onClick={onClose}
-            className="px-5 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
+            className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition border-none bg-transparent cursor-pointer"
           >
             Cancel
           </button>
           <button 
+            type="button" 
             onClick={onSave}
-            className="px-5 py-2.5 rounded-xl bg-yellow-400 text-black text-sm font-bold hover:bg-yellow-500 transition cursor-pointer border-none"
+            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-black text-xs transition shadow-2xs cursor-pointer border-none"
           >
-            Save Profile
+            Save Changes
           </button>
         </div>
       </div>

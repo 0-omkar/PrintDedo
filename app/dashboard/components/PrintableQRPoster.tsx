@@ -52,7 +52,7 @@ export const PrintableQRPoster = ({ userId, origin, shopName }: PrintableQRPoste
         </div>
 
         <div className="pt-2 text-[9px] font-extrabold text-slate-400 uppercase tracking-widest border-t border-slate-100 w-full max-w-xs">
-          Powered by PrintDedo • Smart Printing. Simplified.
+          Powered by PrintDeDo • Less Confusion. More Printing.
         </div>
       </div>
     </div>
