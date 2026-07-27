@@ -7,9 +7,11 @@ import {
   Star, 
   Download, 
   FileText,
-  Phone
+  Phone,
+  Menu
 } from 'lucide-react';
 import { XeroxLogoSVG } from '@/components/XeroxLogoSVG';
+import { BrandLogo } from '@/components/BrandLogo';
 
 interface LiveOrdersQueueProps {
   shopName: string;
@@ -28,6 +30,7 @@ interface LiveOrdersQueueProps {
   handlePrint: (order: any) => void;
   handleDownload?: (order: any) => void;
   formatFilename: (path: string) => string;
+  onToggleMobileSidebar?: () => void;
 }
 
 export const LiveOrdersQueue = ({
@@ -47,11 +50,26 @@ export const LiveOrdersQueue = ({
   handlePrint,
   handleDownload,
   formatFilename,
+  onToggleMobileSidebar,
 }: LiveOrdersQueueProps) => {
   const subAlert = getSubscriptionAlert();
 
   return (
-    <main className="flex-1 flex flex-col h-screen max-h-screen p-6 md:p-8 overflow-hidden w-full max-w-full print:hidden relative z-10 space-y-6">
+    <main className="flex-1 flex flex-col h-screen max-h-screen p-4 sm:p-6 md:p-8 overflow-y-auto md:overflow-hidden w-full max-w-full print:hidden relative z-10 space-y-4 sm:space-y-6">
+      
+      {/* Mobile Top Header: 3-lines menu icon in circle + PrintDedo logo redirecting to landing page */}
+      <div className="shrink-0 flex md:hidden items-center justify-between bg-white border border-slate-200 rounded-3xl p-3 px-4 shadow-2xs w-full select-none">
+        <button
+          type="button"
+          onClick={onToggleMobileSidebar}
+          className="w-10 h-10 rounded-full border border-slate-200 bg-slate-50 hover:bg-amber-50 hover:border-amber-400 active:scale-95 text-slate-800 flex items-center justify-center transition cursor-pointer shadow-2xs shrink-0"
+          title="Open Menu Sidebar"
+        >
+          <Menu className="w-5 h-5 text-slate-900" />
+        </button>
+
+        <BrandLogo size="sm" href="/" showSubtitle={false} />
+      </div>
       {/* Subscription Alert Banner */}
       {subAlert?.type === 'warning' && (
         <div className={`shrink-0 border p-5 rounded-3xl shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-fade-in ${subAlert.colorClass}`}>
@@ -221,67 +239,54 @@ export const LiveOrdersQueue = ({
             <p className="text-slate-500 font-medium">New print orders will appear here in real-time when<br/>customers upload them.</p>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto min-h-0 pr-1">
-            <table className="w-full text-left border-separate border-spacing-y-2.5">
-              <thead>
-                <tr className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider sticky top-0 bg-white z-10 shadow-2xs">
-                  <th className="py-2.5 px-4 w-12 text-center">#</th>
-                  <th className="py-2.5 px-4">Customer</th>
-                  <th className="py-2.5 px-4">Files</th>
-                  <th className="py-2.5 px-4">Type</th>
-                  <th className="py-2.5 px-4">Pages</th>
-                  <th className="py-2.5 px-4">Side</th>
-                  <th className="py-2.5 px-4">Add-ons</th>
-                  <th className="py-2.5 px-4 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-transparent">
-                {orders.map((order, index) => {
-                  let cleanCustomerName = 'Anonymous';
-                  let extractedPagesTag: string | null = null;
-                  let extractedAddonsTag: string | null = null;
+          <div className="flex-1 overflow-y-auto min-h-0 pr-0.5">
+            {/* Mobile View: Dynamic Percentage Card Queue (block md:hidden) */}
+            <div className="block md:hidden space-y-3.5 w-full">
+              {orders.map((order, index) => {
+                let cleanCustomerName = 'Anonymous';
+                let extractedPagesTag: string | null = null;
+                let extractedAddonsTag: string | null = null;
 
-                  if (order.customer_name) {
-                    const bracketIdx = order.customer_name.indexOf('[');
-                    cleanCustomerName = bracketIdx !== -1 
-                      ? order.customer_name.substring(0, bracketIdx).trim() 
-                      : order.customer_name.trim();
+                if (order.customer_name) {
+                  const bracketIdx = order.customer_name.indexOf('[');
+                  cleanCustomerName = bracketIdx !== -1 
+                    ? order.customer_name.substring(0, bracketIdx).trim() 
+                    : order.customer_name.trim();
 
-                    if (bracketIdx !== -1) {
-                      const detailsStr = order.customer_name.substring(bracketIdx);
-                      const pageMatch = detailsStr.match(/\[(?:Pages|All)\s+([^\]]+)\]/i);
-                      if (pageMatch && pageMatch[1]) {
-                        extractedPagesTag = pageMatch[1].replace(/\s*\(\d+\s*Total\)/i, '').trim();
-                      }
-                      const addonMatch = detailsStr.match(/\[\+\s*([^\]]+)\]/);
-                      if (addonMatch && addonMatch[1]) {
-                        extractedAddonsTag = addonMatch[1].trim();
-                      }
+                  if (bracketIdx !== -1) {
+                    const detailsStr = order.customer_name.substring(bracketIdx);
+                    const pageMatch = detailsStr.match(/\[(?:Pages|All)\s+([^\]]+)\]/i);
+                    if (pageMatch && pageMatch[1]) {
+                      extractedPagesTag = pageMatch[1].replace(/\s*\(\d+\s*Total\)/i, '').trim();
+                    }
+                    const addonMatch = detailsStr.match(/\[\+\s*([^\]]+)\]/);
+                    if (addonMatch && addonMatch[1]) {
+                      extractedAddonsTag = addonMatch[1].trim();
                     }
                   }
+                }
 
-                  const isRawOfficeDoc = (order.file_path || '').toLowerCase().match(/\.(pptx|ppt|docx|doc|xlsx|xls)$/i);
-                  
-                  // Side determination (single-sided vs double-sided)
-                  const isDoubleSided = order.print_sides === 'double' || 
-                    order.is_double_sided === true || 
-                    (order.customer_name && order.customer_name.toLowerCase().includes('double'));
-                  const sideLabel = isDoubleSided ? 'Double' : 'Single';
+                const isRawOfficeDoc = (order.file_path || '').toLowerCase().match(/\.(pptx|ppt|docx|doc|xlsx|xls)$/i);
+                const isDoubleSided = order.print_sides === 'double' || 
+                  order.is_double_sided === true || 
+                  (order.customer_name && order.customer_name.toLowerCase().includes('double'));
+                const sideLabel = isDoubleSided ? 'Double' : 'Single';
+                const filename = formatFilename(order.file_path);
 
-                  return (
-                    <tr 
-                      key={order.id} 
-                      className="bg-white hover:bg-slate-50/90 border border-slate-200/80 rounded-2xl shadow-2xs transition-all group"
-                    >
-                      {/* Index Column */}
-                      <td className="py-3.5 px-4 font-black text-slate-900 text-sm text-center">
-                        {index + 1}
-                      </td>
-
-                      {/* Customer Column */}
-                      <td className="py-3.5 px-4">
-                        <div className="min-w-0">
-                          <span className="font-bold text-slate-900 text-sm block truncate" title={cleanCustomerName}>
+                return (
+                  <div
+                    key={order.id}
+                    onClick={() => handleDownload ? handleDownload(order) : handlePrint(order)}
+                    className="w-full bg-white border border-slate-200 hover:border-amber-400 rounded-2xl p-4 shadow-2xs transition-all active:scale-[0.99] cursor-pointer flex flex-col space-y-3 group select-none"
+                  >
+                    {/* Top Row: Queue # & Customer Name & Phone */}
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                      <div className="flex items-center space-x-2.5 min-w-0 flex-1">
+                        <span className="w-7 h-7 rounded-full bg-amber-100 border border-amber-300 text-amber-900 font-black text-xs flex items-center justify-center shrink-0">
+                          #{index + 1}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <span className="font-extrabold text-slate-950 text-sm block truncate" title={cleanCustomerName}>
                             {cleanCustomerName}
                           </span>
                           {order.customer_phone && (
@@ -290,80 +295,209 @@ export const LiveOrdersQueue = ({
                             </span>
                           )}
                         </div>
-                      </td>
+                      </div>
 
-                      {/* Files Column */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-extrabold text-sm text-slate-800">
-                            1
+                      <span className="text-xs font-black text-amber-600 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200 shrink-0">
+                        ₹{order.total_cost || 0}
+                      </span>
+                    </div>
+
+                    {/* Middle Row: PDF / File Name Box */}
+                    <div className="flex items-center space-x-3 bg-slate-50/90 p-3 rounded-xl border border-slate-200/80">
+                      <div className="w-9 h-9 bg-red-50 border border-red-200 rounded-xl flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5 text-red-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-extrabold text-slate-900 truncate" title={filename}>
+                          {filename}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          <span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-1.5 py-0.5 rounded">
+                            {order.quantity || 1} Copies
                           </span>
-                          <div className="w-7 h-7 bg-red-50 border border-red-200 rounded-lg flex items-center justify-center shrink-0">
-                            <FileText className="w-4 h-4 text-red-500" />
-                          </div>
-                          <span className="text-xs font-semibold text-slate-500 truncate max-w-[140px]" title={formatFilename(order.file_path)}>
-                            {formatFilename(order.file_path)}
+                          <span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-1.5 py-0.5 rounded">
+                            {order.color_mode === 'color' || order.color_mode === 'COLOR' ? 'Color' : 'B&W'}
                           </span>
-                        </div>
-                      </td>
-
-                      {/* Type Column */}
-                      <td className="py-3.5 px-4">
-                        <span className="font-extrabold text-xs text-slate-800 bg-slate-100 border border-slate-200/80 px-2.5 py-1 rounded-lg">
-                          {order.color_mode === 'color' || order.color_mode === 'COLOR' ? 'Color' : 'B&W'}
-                        </span>
-                      </td>
-
-                      {/* Pages Column */}
-                      <td className="py-3.5 px-4 font-bold text-sm text-slate-900">
-                        {extractedPagesTag || order.quantity || '1'}
-                      </td>
-
-                      {/* Side Column */}
-                      <td className="py-3.5 px-4">
-                        <span className="font-extrabold text-xs text-slate-800 bg-slate-100 border border-slate-200/80 px-2.5 py-1 rounded-lg">
-                          {sideLabel}
-                        </span>
-                      </td>
-
-                      {/* Add-ons Column */}
-                      <td className="py-3.5 px-4">
-                        {extractedAddonsTag ? (
-                          <span className="bg-amber-50 text-amber-900 border border-amber-200 px-2.5 py-1 rounded-lg font-extrabold text-xs">
-                            + {extractedAddonsTag}
+                          <span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-1.5 py-0.5 rounded">
+                            {sideLabel}
                           </span>
-                        ) : (
-                          <span className="text-slate-300 font-bold text-xs">—</span>
-                        )}
-                      </td>
-
-                      {/* Actions Column */}
-                      <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end space-x-2">
-                          {!isRawOfficeDoc && handleDownload && (
-                            <button
-                              onClick={() => handleDownload(order)}
-                              title="Download file directly"
-                              className="px-3.5 py-2 bg-slate-100 text-slate-800 hover:bg-slate-200 border border-slate-200 rounded-xl font-extrabold text-xs transition cursor-pointer flex items-center space-x-1"
-                            >
-                              <Download className="w-3.5 h-3.5 text-slate-600" />
-                              <span>Download</span>
-                            </button>
+                          {extractedPagesTag && (
+                            <span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 px-1.5 py-0.5 rounded">
+                              P: {extractedPagesTag}
+                            </span>
                           )}
-                          <button 
-                            onClick={() => handlePrint(order)}
-                            className="px-4 py-2 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-black text-xs rounded-xl transition shadow-2xs cursor-pointer flex items-center space-x-1.5"
-                          >
-                            {isRawOfficeDoc ? <Download className="w-3.5 h-3.5" /> : <Printer className="w-3.5 h-3.5" />}
-                            <span>{isRawOfficeDoc ? 'Download & Print' : 'Print Now'}</span>
-                          </button>
+                          {extractedAddonsTag && (
+                            <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded">
+                              + {extractedAddonsTag}
+                            </span>
+                          )}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: Action Button */}
+                    <div className="flex items-center justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (handleDownload) handleDownload(order);
+                          else handlePrint(order);
+                        }}
+                        className="w-full bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-black text-xs py-2.5 px-4 rounded-xl transition shadow-2xs flex items-center justify-center space-x-2 border-none cursor-pointer"
+                      >
+                        {isRawOfficeDoc ? <Download className="w-4 h-4 text-slate-950" /> : <Printer className="w-4 h-4 text-slate-950" />}
+                        <span>Requirements & Print / Download</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop View: Full Table View (hidden md:block) */}
+            <div className="hidden md:block w-full">
+              <table className="w-full text-left border-separate border-spacing-y-2.5">
+                <thead>
+                  <tr className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider sticky top-0 bg-white z-10 shadow-2xs">
+                    <th className="py-2.5 px-4 w-12 text-center">#</th>
+                    <th className="py-2.5 px-4">Customer</th>
+                    <th className="py-2.5 px-4">Files</th>
+                    <th className="py-2.5 px-4">Type</th>
+                    <th className="py-2.5 px-4">Pages</th>
+                    <th className="py-2.5 px-4">Side</th>
+                    <th className="py-2.5 px-4">Add-ons</th>
+                    <th className="py-2.5 px-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-transparent">
+                  {orders.map((order, index) => {
+                    let cleanCustomerName = 'Anonymous';
+                    let extractedPagesTag: string | null = null;
+                    let extractedAddonsTag: string | null = null;
+
+                    if (order.customer_name) {
+                      const bracketIdx = order.customer_name.indexOf('[');
+                      cleanCustomerName = bracketIdx !== -1 
+                        ? order.customer_name.substring(0, bracketIdx).trim() 
+                        : order.customer_name.trim();
+
+                      if (bracketIdx !== -1) {
+                        const detailsStr = order.customer_name.substring(bracketIdx);
+                        const pageMatch = detailsStr.match(/\[(?:Pages|All)\s+([^\]]+)\]/i);
+                        if (pageMatch && pageMatch[1]) {
+                          extractedPagesTag = pageMatch[1].replace(/\s*\(\d+\s*Total\)/i, '').trim();
+                        }
+                        const addonMatch = detailsStr.match(/\[\+\s*([^\]]+)\]/);
+                        if (addonMatch && addonMatch[1]) {
+                          extractedAddonsTag = addonMatch[1].trim();
+                        }
+                      }
+                    }
+
+                    const isRawOfficeDoc = (order.file_path || '').toLowerCase().match(/\.(pptx|ppt|docx|doc|xlsx|xls)$/i);
+                    const isDoubleSided = order.print_sides === 'double' || 
+                      order.is_double_sided === true || 
+                      (order.customer_name && order.customer_name.toLowerCase().includes('double'));
+                    const sideLabel = isDoubleSided ? 'Double' : 'Single';
+
+                    return (
+                      <tr 
+                        key={order.id} 
+                        className="bg-white hover:bg-slate-50/90 border border-slate-200/80 rounded-2xl shadow-2xs transition-all group"
+                      >
+                        {/* Index Column */}
+                        <td className="py-3.5 px-4 font-black text-slate-900 text-sm text-center">
+                          {index + 1}
+                        </td>
+
+                        {/* Customer Column */}
+                        <td className="py-3.5 px-4">
+                          <div className="min-w-0">
+                            <span className="font-bold text-slate-900 text-sm block truncate" title={cleanCustomerName}>
+                              {cleanCustomerName}
+                            </span>
+                            {order.customer_phone && (
+                              <span className="text-[11px] font-semibold text-slate-400 block truncate">
+                                📞 {order.customer_phone}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Files Column */}
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center space-x-2">
+                            <span className="font-extrabold text-sm text-slate-800">
+                              1
+                            </span>
+                            <div className="w-7 h-7 bg-red-50 border border-red-200 rounded-lg flex items-center justify-center shrink-0">
+                              <FileText className="w-4 h-4 text-red-500" />
+                            </div>
+                            <span className="text-xs font-semibold text-slate-500 truncate max-w-[140px]" title={formatFilename(order.file_path)}>
+                              {formatFilename(order.file_path)}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Type Column */}
+                        <td className="py-3.5 px-4">
+                          <span className="font-extrabold text-xs text-slate-800 bg-slate-100 border border-slate-200/80 px-2.5 py-1 rounded-lg">
+                            {order.color_mode === 'color' || order.color_mode === 'COLOR' ? 'Color' : 'B&W'}
+                          </span>
+                        </td>
+
+                        {/* Pages Column */}
+                        <td className="py-3.5 px-4 font-bold text-sm text-slate-900">
+                          {extractedPagesTag || order.quantity || '1'}
+                        </td>
+
+                        {/* Side Column */}
+                        <td className="py-3.5 px-4">
+                          <span className="font-extrabold text-xs text-slate-800 bg-slate-100 border border-slate-200/80 px-2.5 py-1 rounded-lg">
+                            {sideLabel}
+                          </span>
+                        </td>
+
+                        {/* Add-ons Column */}
+                        <td className="py-3.5 px-4">
+                          {extractedAddonsTag ? (
+                            <span className="bg-amber-50 text-amber-900 border border-amber-200 px-2.5 py-1 rounded-lg font-extrabold text-xs">
+                              + {extractedAddonsTag}
+                            </span>
+                          ) : (
+                            <span className="text-slate-300 font-bold text-xs">—</span>
+                          )}
+                        </td>
+
+                        {/* Actions Column */}
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="flex items-center justify-end space-x-2">
+                            {!isRawOfficeDoc && handleDownload && (
+                              <button
+                                onClick={() => handleDownload(order)}
+                                title="Download file directly"
+                                className="px-3.5 py-2 bg-slate-100 text-slate-800 hover:bg-slate-200 border border-slate-200 rounded-xl font-extrabold text-xs transition cursor-pointer flex items-center space-x-1"
+                              >
+                                <Download className="w-3.5 h-3.5 text-slate-600" />
+                                <span>Download</span>
+                              </button>
+                            )}
+                            <button 
+                              onClick={() => handlePrint(order)}
+                              className="px-4 py-2 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-black text-xs rounded-xl transition shadow-2xs cursor-pointer flex items-center space-x-1.5"
+                            >
+                              {isRawOfficeDoc ? <Download className="w-3.5 h-3.5" /> : <Printer className="w-3.5 h-3.5" />}
+                              <span>{isRawOfficeDoc ? 'Download & Print' : 'Print Now'}</span>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 

@@ -10,7 +10,8 @@ import {
   Headphones,
   HelpCircle,
   Tag,
-  Layers
+  Layers,
+  X
 } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { PriceTier, Addon } from '../types';
@@ -35,6 +36,8 @@ interface SidebarProps {
   addons: Addon[];
   setIsEditingAddons: (open: boolean) => void;
   handleLogout: () => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
 export const Sidebar = ({
@@ -56,18 +59,29 @@ export const Sidebar = ({
   addons,
   setIsEditingAddons,
   handleLogout,
+  isMobileOpen = false,
+  onCloseMobile,
 }: SidebarProps) => {
-  return (
-    <aside className="w-[320px] bg-white border-r border-slate-200 flex flex-col hidden md:flex print:hidden relative z-10">
-
+  const sidebarBody = (
+    <>
       {/* Brand Header */}
-      <div className="p-6 border-b border-slate-200">
+      <div className="p-6 border-b border-slate-200 flex items-center justify-between">
         <BrandLogo size="lg" showSubtitle />
+        {onCloseMobile && (
+          <button
+            type="button"
+            onClick={onCloseMobile}
+            className="md:hidden p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition border-none bg-transparent cursor-pointer"
+            title="Close menu"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        )}
       </div>
 
       <div className="p-5 flex-1 overflow-y-auto space-y-5">
 
-        {/* 1. Pricing Dropdown Button & Content (Shifted Above QR) */}
+        {/* 1. Pricing Dropdown Button & Content */}
         <div>
           <button
             type="button"
@@ -203,7 +217,7 @@ export const Sidebar = ({
           )}
         </div>
 
-        {/* 2. Add-ons Dropdown Button & Content (Shifted Above QR) */}
+        {/* 2. Add-ons Dropdown Button & Content */}
         <div>
           <button
             type="button"
@@ -294,7 +308,7 @@ export const Sidebar = ({
           )}
         </div>
 
-        {/* 4. Need Help? Support Card (Matching Attached Image 1) */}
+        {/* 4. Need Help? Support Card */}
         <Link
           href="/contact-admin"
           className="block bg-white border border-slate-200/90 hover:border-amber-400 rounded-3xl p-5 text-center shadow-xs hover:shadow-md transition-all cursor-pointer no-underline group select-none relative overflow-hidden"
@@ -334,6 +348,31 @@ export const Sidebar = ({
           <span>Logout</span>
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile Collapsible Drawer Overlay */}
+      {isMobileOpen && (
+        <div className="md:hidden print:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity duration-300"
+            onClick={onCloseMobile}
+          />
+          {/* Slide-over Container (Dynamic width up to max 320px) */}
+          <aside className="relative w-[85%] max-w-[320px] bg-white h-full flex flex-col z-50 shadow-2xl animate-in slide-in-from-left duration-300">
+            {sidebarBody}
+          </aside>
+        </div>
+      )}
+
+      {/* Desktop Fixed Left Sidebar */}
+      <aside className="w-[320px] bg-white border-r border-slate-200 flex flex-col hidden md:flex print:hidden relative z-10 shrink-0">
+        {sidebarBody}
+      </aside>
+    </>
   );
 };
+

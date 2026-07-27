@@ -123,11 +123,11 @@ export const DownloadOrderModal = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-3 pt-2">
+        <div className="flex flex-col sm:flex-row items-center gap-3 pt-2 w-full">
           <button
             onClick={handleDownloadClick}
             disabled={downloading}
-            className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-black py-3 px-4 rounded-xl text-sm transition flex items-center justify-center space-x-2 border border-slate-300 cursor-pointer disabled:opacity-50"
+            className="w-full sm:flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-black py-3 px-4 rounded-xl text-sm transition flex items-center justify-center space-x-2 border border-slate-300 cursor-pointer disabled:opacity-50"
           >
             <Download className="w-4 h-4" />
             <span>{downloading ? 'Downloading...' : 'Download File'}</span>
@@ -136,7 +136,7 @@ export const DownloadOrderModal = ({
           <button
             onClick={handleCompleteClick}
             disabled={completing}
-            className="flex-1 bg-yellow-400 hover:bg-yellow-500 text-black font-black py-3 px-4 rounded-xl text-sm transition flex items-center justify-center space-x-2 border-none cursor-pointer shadow-sm disabled:opacity-50"
+            className="w-full sm:flex-1 bg-yellow-400 hover:bg-yellow-500 text-black font-black py-3 px-4 rounded-xl text-sm transition flex items-center justify-center space-x-2 border-none cursor-pointer shadow-sm disabled:opacity-50"
           >
             <CheckCircle className="w-4 h-4" />
             <span>{completing ? 'Completing...' : 'Done / Complete Order'}</span>

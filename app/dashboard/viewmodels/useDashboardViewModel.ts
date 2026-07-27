@@ -14,6 +14,7 @@ export function useDashboardViewModel() {
   const [isRecentsModalOpen, setIsRecentsModalOpen] = useState(false);
   const [isShopPricingOpen, setIsShopPricingOpen] = useState(false);
   const [isAddonsDropdownOpen, setIsAddonsDropdownOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Page Range Price Tiers State & Selection
   const [priceTiers, setPriceTiers] = useState<PriceTier[]>([]);
@@ -1252,6 +1253,8 @@ export function useDashboardViewModel() {
     shopReviews,
     isShopReviewsModalOpen,
     setIsShopReviewsModalOpen,
+    isMobileSidebarOpen,
+    setIsMobileSidebarOpen,
 
     // Download & Print Requirements Modal
     downloadModalOrder,

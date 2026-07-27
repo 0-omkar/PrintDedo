@@ -40,6 +40,8 @@ export default function DashboardPage() {
           addons={vm.addons}
           setIsEditingAddons={vm.setIsEditingAddons}
           handleLogout={vm.handleLogout}
+          isMobileOpen={vm.isMobileSidebarOpen}
+          onCloseMobile={() => vm.setIsMobileSidebarOpen(false)}
         />
 
         {/* Main Content Area: Live Queue */}
@@ -66,6 +68,7 @@ export default function DashboardPage() {
           handlePrint={vm.handlePrint}
           handleDownload={vm.handleDownload}
           formatFilename={vm.formatFilename}
+          onToggleMobileSidebar={() => vm.setIsMobileSidebarOpen(!vm.isMobileSidebarOpen)}
         />
 
         {/* Recent Orders Modal */}
