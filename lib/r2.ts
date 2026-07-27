@@ -106,7 +106,7 @@ export async function getPresignedDownloadUrl(fileName: string) {
       Key: fileName,
     });
 
-    const url = await getSignedUrl(s3Client, command, { expiresIn: 600 });
+    const url = await getSignedUrl(s3Client, command, { expiresIn: 60 });
     return { success: true, url };
   } catch (error: any) {
     console.error('Error generating presigned download URL:', error);

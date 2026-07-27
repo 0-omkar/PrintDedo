@@ -499,13 +499,24 @@ export function useShopDropBoxViewModel(shopId: string) {
     ];
 
     try {
+      const { encryptFile } = await import('@/lib/crypto');
+
       for (const doc of docsToUpload) {
+        // Enforce 50MB file size limit for RAM safety
+        const MAX_FILE_SIZE = 50 * 1024 * 1024;
+        if (doc.file.size > MAX_FILE_SIZE) {
+          throw new Error(`File "${doc.file.name}" exceeds the 50MB size limit.`);
+        }
+
+        // Encrypt file client-side using Web Crypto API before upload
+        const { encryptedBlob, keyBase64, ivBase64 } = await encryptFile(doc.file);
+
         const sanitizedOriginalName = doc.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const fileName = `${shopId}/${Date.now()}_${Math.random().toString(36).substring(7)}_${sanitizedOriginalName}`;
 
         let uploadedSuccessfully = false;
 
-        // Try direct browser upload via presigned URL first
+        // Try direct browser upload of encrypted blob via presigned URL
         try {
           const { getPresignedUploadUrl } = await import('@/lib/r2');
           const presigned = await getPresignedUploadUrl(fileName);
@@ -513,7 +524,8 @@ export function useShopDropBoxViewModel(shopId: string) {
           if (presigned.success && presigned.url) {
             const uploadRes = await fetch(presigned.url, {
               method: 'PUT',
-              body: doc.file,
+              body: encryptedBlob,
+              headers: { 'Content-Type': 'application/octet-stream' },
             });
 
             if (uploadRes.ok) {
@@ -523,22 +535,22 @@ export function useShopDropBoxViewModel(shopId: string) {
             }
           }
         } catch (clientErr) {
-          console.warn('Presigned browser upload failed or blocked by CORS/network. Trying direct server upload fallback...', clientErr);
+          console.warn('Presigned browser upload failed, attempting fallback...', clientErr);
         }
 
-        // Automatic Fallback: If client-side fetch failed (CORS/Adblocker/Network), upload via direct Server Action
+        // Automatic Fallback: Upload encrypted file via direct Server Action if client PUT blocked
         if (!uploadedSuccessfully) {
           const { uploadR2Direct } = await import('@/lib/r2');
+          const encryptedFile = new File([encryptedBlob], doc.file.name, { type: 'application/octet-stream' });
           const formData = new FormData();
-          formData.append('file', doc.file);
+          formData.append('file', encryptedFile);
           formData.append('fileName', fileName);
 
           const serverUpload = await uploadR2Direct(formData);
           if (!serverUpload.success) {
-            throw new Error(serverUpload.error || 'Failed to upload PDF file to Cloudflare R2.');
+            throw new Error(serverUpload.error || 'Failed to upload document to Cloudflare R2.');
           }
         }
-
 
         let pageSelectionStr = '';
         if (doc.pageSelectionMode === 'range') {
@@ -571,7 +583,10 @@ export function useShopDropBoxViewModel(shopId: string) {
             color_mode: doc.printType || 'bw',
             total_cost: doc.itemCost,
             status: 'pending',
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            encryption_iv: ivBase64,
+            encrypted_key: keyBase64,
+            is_encrypted: true,
           });
 
         if (dbError) {

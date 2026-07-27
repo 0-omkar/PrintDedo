@@ -854,16 +854,22 @@ export function useDashboardViewModel() {
       let downloadBlob: Blob;
       const filename = formatFilename(order.file_path);
 
+      const res = await fetch(presigned.url);
+      if (!res.ok) throw new Error('Failed to fetch file for download.');
+      let rawBuffer = await res.arrayBuffer();
+
+      if (order.is_encrypted && order.encrypted_key && order.encryption_iv) {
+        const { decryptFile } = await import('@/lib/crypto');
+        const mimeType = isPdf ? 'application/pdf' : 'application/octet-stream';
+        const decryptedBlob = await decryptFile(rawBuffer, order.encrypted_key, order.encryption_iv, mimeType);
+        rawBuffer = await decryptedBlob.arrayBuffer();
+      }
+
       if (isPdf) {
-        const res = await fetch(presigned.url);
-        if (!res.ok) throw new Error('Failed to fetch PDF for download.');
-        const rawBuffer = await (await res.blob()).arrayBuffer();
         const processedBytes = await slicePdfIfNeeded(rawBuffer, order.customer_name);
         downloadBlob = new Blob([new Uint8Array(processedBytes)], { type: 'application/pdf' });
       } else {
-        const res = await fetch(presigned.url);
-        if (!res.ok) throw new Error('Failed to fetch file for download.');
-        downloadBlob = await res.blob();
+        downloadBlob = new Blob([rawBuffer]);
       }
 
       // Local blob URL guarantees direct 1-click download without opening a new tab
@@ -874,7 +880,7 @@ export function useDashboardViewModel() {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(localBlobUrl), 10000);
+      setTimeout(() => URL.revokeObjectURL(localBlobUrl), 60000);
 
       toast.success('Download started directly!');
     } catch (err: any) {
@@ -944,8 +950,14 @@ export function useDashboardViewModel() {
       const res = await fetch(presigned.url);
       if (!res.ok) throw new Error('Failed to fetch PDF from Cloudflare R2.');
 
-      const fileBlob = await res.blob();
-      const rawBuffer = await fileBlob.arrayBuffer();
+      let rawBuffer = await res.arrayBuffer();
+
+      if (order.is_encrypted && order.encrypted_key && order.encryption_iv) {
+        const { decryptFile } = await import('@/lib/crypto');
+        const decryptedBlob = await decryptFile(rawBuffer, order.encrypted_key, order.encryption_iv, 'application/pdf');
+        rawBuffer = await decryptedBlob.arrayBuffer();
+      }
+
       const processedPdfBytes = await slicePdfIfNeeded(rawBuffer, order.customer_name);
       const pdfBlobUrl = URL.createObjectURL(new Blob([new Uint8Array(processedPdfBytes)], { type: 'application/pdf' }));
 
