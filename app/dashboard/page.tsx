@@ -56,7 +56,7 @@ export default function DashboardPage() {
           getSubscriptionAlert={vm.getSubscriptionAlert}
           onOpenProfileEdit={() => {
             vm.setTempShopName(vm.shopName);
-            vm.setTempPhone(vm.shopPhone);
+            vm.setTempAlternatePhone(vm.alternatePhone);
             vm.setTempLocation(vm.location);
             vm.setTempLogo(vm.logo);
             vm.setIsEditingBanner(true);
@@ -92,8 +92,9 @@ export default function DashboardPage() {
           onClose={() => vm.setIsEditingBanner(false)}
           tempShopName={vm.tempShopName}
           setTempShopName={vm.setTempShopName}
-          tempPhone={vm.tempPhone}
-          setTempPhone={vm.setTempPhone}
+          registeredPhone={vm.registeredPhone}
+          tempAlternatePhone={vm.tempAlternatePhone}
+          setTempAlternatePhone={vm.setTempAlternatePhone}
           tempLocation={vm.tempLocation}
           setTempLocation={vm.setTempLocation}
           tempLogo={vm.tempLogo}

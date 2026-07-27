@@ -272,9 +272,16 @@ export const ShopsOverviewTab = ({
                       
                       <p className="text-[10px] text-slate-400 font-bold font-mono tracking-wider">{shop.id}</p>
                       
-                      <div className="flex items-center space-x-2 bg-amber-50 text-amber-900 border border-amber-200/80 px-2.5 py-1 rounded-lg text-xs font-extrabold w-fit my-1.5">
-                        <Phone className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                        <span>Owner Mobile: {shop.phone || shop.mobile_number || shop.shop_phone || 'Not Registered'}</span>
+                      <div className="flex flex-wrap items-center gap-2 my-1.5">
+                        <div className="flex items-center space-x-1.5 bg-amber-50 text-amber-900 border border-amber-200/80 px-2.5 py-1 rounded-lg text-xs font-extrabold w-fit">
+                          <Phone className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span>Owner Mobile: {shop.phone || shop.mobile_number || shop.shop_phone || 'Not Registered'}</span>
+                        </div>
+                        {shop.alternate_phone && (
+                          <div className="flex items-center space-x-1.5 bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-lg text-xs font-bold w-fit">
+                            <span>Alt: {shop.alternate_phone}</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="text-xs text-slate-500 font-semibold pt-0.5">

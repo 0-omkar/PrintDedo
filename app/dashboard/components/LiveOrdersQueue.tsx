@@ -103,10 +103,12 @@ export const LiveOrdersQueue = ({
             </h2>
             
             {/* Shop Contact Mobile Number */}
-            <div className="flex items-center space-x-1.5 text-slate-700 text-xs md:text-sm font-extrabold mt-0.5">
-              <Phone className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-              <span>{shopPhone || '+91 9876543210'}</span>
-            </div>
+            {shopPhone && (
+              <div className="flex items-center space-x-1.5 text-slate-700 text-xs md:text-sm font-extrabold mt-0.5">
+                <Phone className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span>{shopPhone}</span>
+              </div>
+            )}
             
             {/* Location */}
             <div className="flex items-center space-x-1.5 text-slate-500 text-xs mt-1 font-medium">

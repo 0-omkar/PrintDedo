@@ -39,10 +39,12 @@ export function useDashboardViewModel() {
   // Editing Banner States
   const [isEditingBanner, setIsEditingBanner] = useState(false);
   const [tempShopName, setTempShopName] = useState('');
-  const [tempPhone, setTempPhone] = useState('');
+  const [registeredPhone, setRegisteredPhone] = useState('');
+  const [alternatePhone, setAlternatePhone] = useState('');
+  const [tempAlternatePhone, setTempAlternatePhone] = useState('');
   const [tempLocation, setTempLocation] = useState('');
   const [tempLogo, setTempLogo] = useState('');
-  const [shopPhone, setShopPhone] = useState('+91 9876543210');
+  const [shopPhone, setShopPhone] = useState('');
 
   // Download & Print Requirements Modal State
   const [downloadModalOrder, setDownloadModalOrder] = useState<any | null>(null);
@@ -393,9 +395,12 @@ export function useDashboardViewModel() {
         setShopName(shopData.store_name);
         setShopProfile(shopData);
         
-        const phoneVal = shopData.phone || shopData.mobile_number || localStorage.getItem('printdedo_shop_phone') || '+91 9876543210';
-        setShopPhone(phoneVal);
-        setTempPhone(phoneVal);
+        const primaryPhone = shopData.phone || shopData.mobile_number || '';
+        const altPhone = shopData.alternate_phone || (typeof window !== 'undefined' ? localStorage.getItem('printdedo_alternate_phone') || '' : '');
+        setRegisteredPhone(primaryPhone);
+        setAlternatePhone(altPhone);
+        setTempAlternatePhone(altPhone);
+        setShopPhone(primaryPhone || altPhone || '');
         if (shopData.pricing_bw !== null && shopData.pricing_bw !== undefined) {
           setPricingBwSingle(shopData.pricing_bw.toString());
         }
@@ -673,28 +678,29 @@ export function useDashboardViewModel() {
     setSaving(true);
     try {
       if (userId) {
-        const updateObj: any = {};
+        const updateObj: any = {
+          alternate_phone: tempAlternatePhone.trim()
+        };
         if (tempShopName !== shopName) updateObj.store_name = tempShopName;
-        if (tempPhone !== shopPhone) updateObj.phone = tempPhone;
 
-        if (Object.keys(updateObj).length > 0) {
-          const { error } = await supabase
-            .from('shops')
-            .update(updateObj)
-            .eq('id', userId);
-          if (error) console.error('Supabase shop update info:', error);
-        }
+        const { error } = await supabase
+          .from('shops')
+          .update(updateObj)
+          .eq('id', userId);
+        if (error) console.error('Supabase shop update info:', error);
+
         setShopName(tempShopName);
-        setShopPhone(tempPhone);
+        setAlternatePhone(tempAlternatePhone.trim());
       }
       
-      localStorage.setItem('printdedo_shop_phone', tempPhone);
-      setShopPhone(tempPhone);
-
-      localStorage.setItem('printdedo_location', tempLocation);
-      setLocation(tempLocation);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('printdedo_alternate_phone', tempAlternatePhone.trim());
+        localStorage.setItem('printdedo_location', tempLocation);
+        localStorage.setItem('printdedo_logo', tempLogo);
+      }
       
-      localStorage.setItem('printdedo_logo', tempLogo);
+      setShopPhone(registeredPhone || tempAlternatePhone.trim());
+      setLocation(tempLocation);
       setLogo(tempLogo);
       
       setIsEditingBanner(false);
@@ -702,8 +708,9 @@ export function useDashboardViewModel() {
     } catch (err) {
       console.error(err);
       toast.error('Failed to save shop details.');
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const handleLogout = async () => {
@@ -1209,8 +1216,10 @@ export function useDashboardViewModel() {
     tempShopName,
     setTempShopName,
     shopPhone,
-    tempPhone,
-    setTempPhone,
+    registeredPhone,
+    alternatePhone,
+    tempAlternatePhone,
+    setTempAlternatePhone,
     tempLocation,
     setTempLocation,
     tempLogo,
