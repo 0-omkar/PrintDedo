@@ -29,6 +29,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing required shop parameters' }, { status: 400 });
     }
 
+    if (store_name.length > 100 || email.length > 100 || (phone && phone.length > 30) || password.length > 100) {
+      return NextResponse.json({ error: 'Input parameter length exceeds maximum limit' }, { status: 400 });
+    }
+
     const supabaseAdmin = getSupabaseAdmin();
 
     // Create user in Supabase Auth using admin client

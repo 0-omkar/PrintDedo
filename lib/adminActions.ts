@@ -135,10 +135,16 @@ export async function updateShopDetailsServer(shopId: string, updatedObj: {
   }
 
   try {
+    const cleanData: any = {};
+    if (updatedObj.store_name) cleanData.store_name = updatedObj.store_name.trim().slice(0, 100);
+    if (updatedObj.phone !== undefined) cleanData.phone = updatedObj.phone.trim().slice(0, 30);
+    if (updatedObj.alternate_phone !== undefined) cleanData.alternate_phone = updatedObj.alternate_phone.trim().slice(0, 30);
+    if (updatedObj.upi_id !== undefined) cleanData.upi_id = updatedObj.upi_id.trim().slice(0, 60);
+
     const supabaseAdmin = getSupabaseAdmin();
     const { error } = await supabaseAdmin
       .from('shops')
-      .update(updatedObj)
+      .update(cleanData)
       .eq('id', shopId);
 
     if (error) return { success: false, error: error.message };

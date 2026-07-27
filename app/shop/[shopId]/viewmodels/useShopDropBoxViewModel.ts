@@ -554,9 +554,11 @@ export function useShopDropBoxViewModel(shopId: string) {
           .filter(Boolean);
 
         const addonsStr = addonNames.length > 0 ? ` [+ ${addonNames.join(', ')}]` : '';
-        const phoneStr = phone ? ` (${phone})` : '';
+        const safeName = name.trim().slice(0, 50);
+        const safePhone = phone ? phone.trim().slice(0, 20) : '';
+        const phoneStr = safePhone ? ` (${safePhone})` : '';
 
-        const finalCustomerNameString = `${name.trim()}${phoneStr}${pageSelectionStr}${addonsStr}`;
+        const finalCustomerNameString = `${safeName}${phoneStr}${pageSelectionStr}${addonsStr}`;
 
         const { error: dbError } = await supabase
           .from('orders')
@@ -613,16 +615,20 @@ export function useShopDropBoxViewModel(shopId: string) {
   const [platformComment, setPlatformComment] = useState('');
 
   const handleAddReview = async () => {
-    const customerName = name.trim() || 'Anonymous';
-    const currentShopName = shopInfo?.store_name || 'Print Shop';
+    const customerName = (name.trim() || 'Anonymous').slice(0, 60);
+    const currentShopName = (shopInfo?.store_name || 'Print Shop').slice(0, 100);
+    const cleanShopComment = shopComment.trim().slice(0, 500);
+    const cleanPlatformComment = platformComment.trim().slice(0, 500);
+    const safeShopRating = Math.min(5, Math.max(1, Number(shopRating) || 5));
+    const safePlatformRating = Math.min(5, Math.max(1, Number(platformRating) || 5));
 
     // 1. Submit Shop Review to Supabase
     try {
       const { error: shopErr } = await supabase.from('shop_reviews').insert({
         shop_id: shopId,
         name: customerName,
-        rating: shopRating,
-        comment: shopComment,
+        rating: safeShopRating,
+        comment: cleanShopComment,
         created_at: new Date().toISOString()
       });
       if (shopErr) console.error('Supabase shop_reviews insert error:', shopErr);
@@ -641,8 +647,8 @@ export function useShopDropBoxViewModel(shopId: string) {
       id: Date.now().toString(),
       shop_id: shopId,
       name: customerName,
-      rating: shopRating,
-      comment: shopComment,
+      rating: safeShopRating,
+      comment: cleanShopComment,
       created_at: new Date().toISOString()
     };
     list.unshift(newShopReview);
@@ -660,8 +666,8 @@ export function useShopDropBoxViewModel(shopId: string) {
       const { error: platErr } = await supabase.from('platform_reviews').insert({
         name: customerName,
         shop_name: currentShopName,
-        rating: platformRating,
-        comment: platformComment,
+        rating: safePlatformRating,
+        comment: cleanPlatformComment,
         created_at: new Date().toISOString()
       });
       if (platErr) console.error('Supabase platform_reviews insert error:', platErr);
@@ -680,8 +686,8 @@ export function useShopDropBoxViewModel(shopId: string) {
       id: Date.now().toString(),
       name: customerName,
       shop_name: currentShopName,
-      rating: platformRating,
-      comment: platformComment,
+      rating: safePlatformRating,
+      comment: cleanPlatformComment,
       created_at: new Date().toISOString()
     });
     localStorage.setItem(platformKey, JSON.stringify(pList));
