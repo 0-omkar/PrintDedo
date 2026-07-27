@@ -351,6 +351,9 @@ export function useDashboardViewModel() {
         return;
       }
       setUserId(session.user.id);
+      if (session.access_token) {
+        document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=${session.expires_in || 604800}; SameSite=Lax`;
+      }
       
       const reviewsKey = `printdedo_reviews_list_${session.user.id}`;
       const storedReviewsList = localStorage.getItem(reviewsKey);
@@ -722,6 +725,7 @@ export function useDashboardViewModel() {
   };
 
   const handleLogout = async () => {
+    document.cookie = 'sb-access-token=; path=/; max-age=0; SameSite=Lax';
     await supabase.auth.signOut();
     router.push('/login');
   };

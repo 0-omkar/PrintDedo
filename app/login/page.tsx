@@ -64,8 +64,14 @@ export default function LoginPage() {
       return;
     }
 
-    if (data.user) {
+    if (data?.session?.access_token) {
+      document.cookie = `sb-access-token=${data.session.access_token}; path=/; max-age=${data.session.expires_in || 604800}; SameSite=Lax`;
+    }
+
+    if (data?.user) {
       router.push('/dashboard');
+    } else {
+      setLoading(false);
     }
   };
 
