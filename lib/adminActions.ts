@@ -121,6 +121,34 @@ export async function renewShopSubscriptionServer(shopId: string, newExpiryIso: 
 }
 
 /**
+ * Server action to update a shop's details (phone, alternate_phone, store_name, upi_id) by Admin
+ */
+export async function updateShopDetailsServer(shopId: string, updatedObj: {
+  store_name?: string;
+  phone?: string;
+  alternate_phone?: string;
+  upi_id?: string;
+}, authPayload?: AdminAuthPayload) {
+  const isAuth = await authorizeAdmin(authPayload);
+  if (!isAuth) {
+    return { success: false, error: 'Unauthorized: Super Admin credentials required.' };
+  }
+
+  try {
+    const supabaseAdmin = getSupabaseAdmin();
+    const { error } = await supabaseAdmin
+      .from('shops')
+      .update(updatedObj)
+      .eq('id', shopId);
+
+    if (error) return { success: false, error: error.message };
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to update shop details' };
+  }
+}
+
+/**
  * Server action to delete an admin support message
  */
 export async function deleteAdminMessageServer(messageId: string, authPayload?: AdminAuthPayload) {

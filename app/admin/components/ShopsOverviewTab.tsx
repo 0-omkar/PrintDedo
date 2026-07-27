@@ -17,6 +17,7 @@ interface ShopsOverviewTabProps {
   formatSize: (bytes: number) => string;
   setActiveRenewalShop: (shop: ShopItem) => void;
   setShopToDelete: (shop: ShopItem) => void;
+  openEditShopModal?: (shop: ShopItem) => void;
 }
 
 export const ShopsOverviewTab = ({
@@ -35,6 +36,7 @@ export const ShopsOverviewTab = ({
   formatSize,
   setActiveRenewalShop,
   setShopToDelete,
+  openEditShopModal,
 }: ShopsOverviewTabProps) => {
   if (activeView === 'overview') {
     return (
@@ -314,8 +316,17 @@ export const ShopsOverviewTab = ({
                       </div>
 
                       <button
+                        onClick={() => openEditShopModal && openEditShopModal(shop)}
+                        className="px-3.5 py-3 bg-amber-100 hover:bg-amber-200 text-amber-950 font-bold rounded-2xl transition cursor-pointer border border-amber-300 flex items-center space-x-1.5 text-xs shadow-2xs shrink-0"
+                        title="Edit Shop Phone & Details"
+                      >
+                        <Phone className="w-4 h-4 text-amber-700" />
+                        <span>Edit Mobile</span>
+                      </button>
+
+                      <button
                         onClick={() => setShopToDelete(shop)}
-                        className="p-3 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-2xl transition cursor-pointer border border-red-100 bg-white"
+                        className="p-3 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-2xl transition cursor-pointer border border-red-100 bg-white shrink-0"
                         title="Delete Shop"
                       >
                         <Trash2 className="w-5 h-5" />

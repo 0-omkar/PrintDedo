@@ -68,6 +68,58 @@ export function useAdminViewModel() {
   const [renewCustomMonths, setRenewCustomMonths] = useState<string>('1');
   const [isRenewing, setIsRenewing] = useState(false);
 
+  // Edit Shop Details Modal State (Admin can edit primary phone, alternate phone, store name, upi)
+  const [editingShopModal, setEditingShopModal] = useState<ShopItem | null>(null);
+  const [editShopName, setEditShopName] = useState('');
+  const [editShopPhone, setEditShopPhone] = useState('');
+  const [editShopAlternatePhone, setEditShopAlternatePhone] = useState('');
+  const [editShopUpi, setEditShopUpi] = useState('');
+  const [isSavingShopDetails, setIsSavingShopDetails] = useState(false);
+
+  const openEditShopModal = (shop: ShopItem) => {
+    setEditingShopModal(shop);
+    setEditShopName(shop.store_name || '');
+    setEditShopPhone(shop.phone || shop.mobile_number || shop.shop_phone || '');
+    setEditShopAlternatePhone(shop.alternate_phone || '');
+    setEditShopUpi(shop.upi_id || '');
+  };
+
+  const closeEditShopModal = () => {
+    setEditingShopModal(null);
+  };
+
+  const handleSaveShopDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingShopModal) return;
+    setIsSavingShopDetails(true);
+
+    try {
+      const { updateShopDetailsServer } = await import('@/lib/adminActions');
+      const res = await updateShopDetailsServer(
+        editingShopModal.id,
+        {
+          store_name: editShopName.trim(),
+          phone: editShopPhone.trim(),
+          alternate_phone: editShopAlternatePhone.trim(),
+          upi_id: editShopUpi.trim(),
+        },
+        { adminEmail, adminPassword }
+      );
+
+      if (res.success) {
+        toast.success(`Updated shop details successfully!`);
+        fetchShops();
+        setEditingShopModal(null);
+      } else {
+        toast.error(res.error || 'Failed to update shop details');
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Error updating shop details');
+    } finally {
+      setIsSavingShopDetails(false);
+    }
+  };
+
   useEffect(() => {
     const checkAdminAuth = async () => {
       const { data: { session }, error } = await supabase.auth.getSession();
@@ -721,6 +773,20 @@ export function useAdminViewModel() {
     setRenewCustomMonths,
     isRenewing,
     handleRenewShop,
+    editingShopModal,
+    setEditingShopModal,
+    editShopName,
+    setEditShopName,
+    editShopPhone,
+    setEditShopPhone,
+    editShopAlternatePhone,
+    setEditShopAlternatePhone,
+    editShopUpi,
+    setEditShopUpi,
+    isSavingShopDetails,
+    openEditShopModal,
+    closeEditShopModal,
+    handleSaveShopDetails,
     fetchShops,
     fetchPlans,
   };

@@ -117,6 +117,7 @@ export default function AdminPage() {
           formatSize={vm.formatSize}
           setActiveRenewalShop={vm.setActiveRenewalShop}
           setShopToDelete={vm.setShopToDelete}
+          openEditShopModal={vm.openEditShopModal}
         />
 
         {/* View 2: Register Shop Screen */}
@@ -216,6 +217,18 @@ export default function AdminPage() {
         plans={vm.plans}
         isRenewing={vm.isRenewing}
         onRenewShop={vm.handleRenewShop}
+        editingShopModal={vm.editingShopModal}
+        setEditingShopModal={vm.setEditingShopModal}
+        editShopName={vm.editShopName}
+        setEditShopName={vm.setEditShopName}
+        editShopPhone={vm.editShopPhone}
+        setEditShopPhone={vm.setEditShopPhone}
+        editShopAlternatePhone={vm.editShopAlternatePhone}
+        setEditShopAlternatePhone={vm.setEditShopAlternatePhone}
+        editShopUpi={vm.editShopUpi}
+        setEditShopUpi={vm.setEditShopUpi}
+        isSavingShopDetails={vm.isSavingShopDetails}
+        onSaveShopDetails={vm.handleSaveShopDetails}
       />
     </div>
   );
