@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabaseClient';
 import Link from 'next/link';
 import { Mail, Phone, User, CreditCard, Shield, Loader2, ArrowLeft } from 'lucide-react';
 import { BackgroundDecorations } from '@/components/BackgroundDecorations';
+import { BrandLogo } from '@/components/BrandLogo';
 
 export default function RenewPage() {
   const [plans, setPlans] = useState<any[]>([]);
@@ -29,12 +30,12 @@ export default function RenewPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col items-center py-10 px-4 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col items-center py-6 sm:py-10 px-4 relative overflow-hidden">
       <BackgroundDecorations />
 
-      <main className="relative z-10 w-full max-w-4xl flex flex-col items-center">
-        {/* Back Link */}
-        <div className="w-full flex justify-start mb-6">
+      <main className="relative z-10 w-full max-w-[95%] sm:max-w-4xl flex flex-col items-center">
+        {/* Back Link & Brand Logo Header */}
+        <div className="w-full flex items-center justify-between mb-6">
           <Link 
             href="/" 
             className="inline-flex items-center space-x-2 text-xs font-black uppercase text-slate-400 hover:text-slate-650 tracking-wider transition"
@@ -42,14 +43,16 @@ export default function RenewPage() {
             <ArrowLeft className="w-4 h-4" />
             <span>Back to Home</span>
           </Link>
+
+          <BrandLogo size="lg" href="/" showSubtitle={false} />
         </div>
 
         {/* Brand/Header */}
-        <div className="flex flex-col items-center text-center mb-10">
-          <div className="bg-yellow-400 p-3 rounded-2xl shadow-sm mb-4 inline-flex items-center justify-center">
+        <div className="flex flex-col items-center text-center mb-8">
+          <div className="bg-yellow-400 p-3 rounded-2xl shadow-sm mb-3 inline-flex items-center justify-center">
             <Shield className="w-8 h-8 text-black" />
           </div>
-          <h1 className="text-3xl font-black text-slate-950 uppercase tracking-tight">PrintDedo Subscription</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-950 uppercase tracking-tight">PrintDedo Subscription</h1>
           <p className="text-xs text-slate-400 font-bold tracking-widest uppercase mt-0.5">Activate or Renew Your Print Shop Portal</p>
         </div>
 

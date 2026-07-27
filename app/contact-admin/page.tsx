@@ -61,8 +61,8 @@ export default function ContactAdminPage() {
       <BackgroundDecorations />
 
       {/* Navigation Header */}
-      <nav className="relative z-10 flex items-center justify-between px-6 py-6 max-w-6xl mx-auto w-full select-none">
-        <BrandLogo size="md" />
+      <nav className="relative z-10 flex items-center justify-between px-4 sm:px-6 py-6 max-w-6xl mx-auto w-full select-none">
+        <BrandLogo size="lg" showSubtitle={false} />
 
         <Link 
           href="/" 
@@ -150,11 +150,11 @@ export default function ContactAdminPage() {
               <p className="text-xs text-slate-600 font-semibold space-x-1">
                 <a href="https://www.linkedin.com/in/omkar-varpe-9704742a9/" target="_blank" rel="noopener noreferrer" className="hover:text-yellow-600 hover:underline">Omkar Varpe</a>
                 <span>•</span>
-                <a href="https://www.linkedin.com/in/pradeep-biswas-developer/" target="_blank" rel="noopener noreferrer" className="hover:text-yellow-600 hover:underline">Pradeep Biswas</a>
+                <a href="https://www.linkedin.com/in/siddhant-deshmukh-0aa485344/" target="_blank" rel="noopener noreferrer" className="hover:text-yellow-600 hover:underline">Siddhant Deshmukh</a>
                 <span>•</span>
                 <a href="https://www.linkedin.com/in/yajan-mehta-9220442b2/" target="_blank" rel="noopener noreferrer" className="hover:text-yellow-600 hover:underline">Yajan Mehta</a>
                 <span>•</span>
-                <a href="https://www.linkedin.com/in/siddhant-deshmukh-0aa485344/" target="_blank" rel="noopener noreferrer" className="hover:text-yellow-600 hover:underline">Siddhant Deshmukh</a>
+                <a href="https://www.linkedin.com/in/pradeep-biswas-developer/" target="_blank" rel="noopener noreferrer" className="hover:text-yellow-600 hover:underline">Pradeep Biswas</a>
               </p>
             </div>
           </div>

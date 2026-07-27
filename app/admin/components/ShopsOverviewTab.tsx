@@ -186,14 +186,6 @@ export const ShopsOverviewTab = ({
   if (activeView === 'audit') {
     return (
       <div className="space-y-6 animate-fade-in">
-        <button
-          onClick={() => setActiveView('overview')}
-          className="inline-flex items-center space-x-2 text-xs font-bold text-slate-500 hover:text-slate-900 border-none bg-transparent cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          <span>Back to Admin Overview</span>
-        </button>
-
         <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
             <div className="flex items-center space-x-3">
@@ -300,10 +292,10 @@ export const ShopsOverviewTab = ({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-                      <div className="flex items-center gap-3.5 bg-amber-50/50 border border-amber-200/60 p-4 rounded-2xl shrink-0">
-                        <HardDrive className="w-6 h-6 text-amber-600" />
-                        <div className="text-left space-y-1">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto justify-between md:justify-end shrink-0">
+                      <div className="flex items-center gap-3.5 bg-amber-50/50 border border-amber-200/60 p-3.5 sm:p-4 rounded-2xl w-full sm:w-auto">
+                        <HardDrive className="w-6 h-6 text-amber-600 shrink-0" />
+                        <div className="text-left space-y-0.5">
                           <div className="flex items-center space-x-2">
                             <span className="text-[9px] font-black text-amber-800 uppercase tracking-wider block">CLOUDFLARE R2:</span>
                             <span className="text-xs font-black text-slate-900">{formatSize(shopMetrics.current)}</span>
@@ -315,22 +307,24 @@ export const ShopsOverviewTab = ({
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => openEditShopModal && openEditShopModal(shop)}
-                        className="px-3.5 py-3 bg-amber-100 hover:bg-amber-200 text-amber-950 font-bold rounded-2xl transition cursor-pointer border border-amber-300 flex items-center space-x-1.5 text-xs shadow-2xs shrink-0"
-                        title="Edit Shop Phone & Details"
-                      >
-                        <Phone className="w-4 h-4 text-amber-700" />
-                        <span>Edit Mobile</span>
-                      </button>
+                      <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                        <button
+                          onClick={() => openEditShopModal && openEditShopModal(shop)}
+                          className="flex-1 sm:flex-none px-3.5 py-3 bg-amber-100 hover:bg-amber-200 text-amber-950 font-bold rounded-2xl transition cursor-pointer border border-amber-300 flex items-center justify-center space-x-1.5 text-xs shadow-2xs"
+                          title="Edit Shop Details"
+                        >
+                          <Phone className="w-3.5 h-3.5" />
+                          <span>Edit Mobile</span>
+                        </button>
 
-                      <button
-                        onClick={() => setShopToDelete(shop)}
-                        className="p-3 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-2xl transition cursor-pointer border border-red-100 bg-white shrink-0"
-                        title="Delete Shop"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
+                        <button
+                          onClick={() => setShopToDelete(shop)}
+                          className="p-3 bg-red-50 hover:bg-red-100 text-red-600 rounded-2xl transition cursor-pointer border border-red-200 flex items-center justify-center shadow-2xs shrink-0"
+                          title="Delete Shop"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

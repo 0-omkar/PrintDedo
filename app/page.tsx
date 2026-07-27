@@ -62,6 +62,8 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, [router]);
 
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#FFFDF8] flex items-center justify-center">
@@ -75,10 +77,10 @@ export default function Home() {
       <BackgroundDecorations />
 
       {/* Navigation Header */}
-      <nav className="relative z-30 flex items-center justify-between px-6 lg:px-12 py-5 max-w-[1500px] mx-auto w-full select-none">
+      <nav className="relative z-30 flex items-center justify-between px-4 sm:px-6 lg:px-12 py-5 max-w-[1500px] mx-auto w-full select-none">
         <BrandLogo size="lg" showSubtitle />
 
-        {/* Navigation Links */}
+        {/* Navigation Links (Desktop) */}
         <div className="hidden md:flex items-center space-x-10 text-sm font-extrabold text-slate-800">
           <a href="#features" className="hover:text-amber-500 transition-colors">Features</a>
           <a href="#pricing" className="hover:text-amber-500 transition-colors">Pricing</a>
@@ -86,8 +88,8 @@ export default function Home() {
           <Link href="/contact-admin" className="hover:text-amber-500 transition-colors">Contact</Link>
         </div>
 
-        {/* Header Action Buttons */}
-        <div className="flex items-center space-x-3">
+        {/* Header Action Buttons (Desktop) */}
+        <div className="hidden md:flex items-center space-x-3">
           {session ? (
             <Link
               href="/dashboard"
@@ -108,19 +110,30 @@ export default function Home() {
               </Link>
               <Link
                 href="/login"
-                className="px-5 py-2.5 text-sm font-bold text-slate-900 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-2xl transition-all shadow-2xs flex items-center space-x-2 cursor-pointer"
+                className="px-6 py-2.5 text-sm font-black text-slate-950 bg-amber-400 hover:bg-amber-500 rounded-2xl transition-all shadow-2xs cursor-pointer border-none"
               >
-                <LockKeyhole className="w-4 h-4 text-slate-600" />
-                <span>Login</span>
-              </Link>
-              <Link
-                href="/signup"
-                className="px-6 py-3 text-sm font-black text-slate-950 bg-amber-400 hover:bg-amber-500 rounded-2xl transition-all shadow-2xs flex items-center space-x-2 cursor-pointer"
-              >
-                <span>Register Your Shop</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>Shop Owner Login</span>
               </Link>
             </>
+          )}
+        </div>
+
+        {/* Mobile Header Action / Menu Button */}
+        <div className="flex md:hidden items-center space-x-2">
+          {session ? (
+            <Link
+              href="/dashboard"
+              className="px-4 py-2 text-xs font-black text-slate-950 bg-amber-400 rounded-xl transition cursor-pointer"
+            >
+              Dashboard
+            </Link>
+          ) : (
+            <Link
+              href="/login"
+              className="px-4 py-2 text-xs font-black text-slate-950 bg-amber-400 rounded-xl transition cursor-pointer"
+            >
+              Login
+            </Link>
           )}
         </div>
       </nav>
@@ -419,16 +432,16 @@ export default function Home() {
               Omkar Varpe
             </a>
             ,{' '}
-            <a href="https://www.linkedin.com/in/pradeep-biswas-developer/" target="_blank" rel="noopener noreferrer" className="text-slate-900 hover:text-amber-600 font-bold transition-colors">
-              Pradeep Biswas
+            <a href="https://www.linkedin.com/in/siddhant-deshmukh-0aa485344/" target="_blank" rel="noopener noreferrer" className="text-slate-900 hover:text-amber-600 font-bold transition-colors">
+              Siddhant Deshmukh
             </a>
             ,{' '}
             <a href="https://www.linkedin.com/in/yajan-mehta-9220442b2/" target="_blank" rel="noopener noreferrer" className="text-slate-900 hover:text-amber-600 font-bold transition-colors">
               Yajan Mehta
             </a>
             ,{' '}
-            <a href="https://www.linkedin.com/in/siddhant-deshmukh-0aa485344/" target="_blank" rel="noopener noreferrer" className="text-slate-900 hover:text-amber-600 font-bold transition-colors">
-              Siddhant Deshmukh
+            <a href="https://www.linkedin.com/in/pradeep-biswas-developer/" target="_blank" rel="noopener noreferrer" className="text-slate-900 hover:text-amber-600 font-bold transition-colors">
+              Pradeep Biswas
             </a>
             .
           </p>

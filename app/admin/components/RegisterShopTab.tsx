@@ -48,14 +48,6 @@ export const RegisterShopTab = ({
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <button
-        onClick={() => setActiveView('overview')}
-        className="inline-flex items-center space-x-2 text-xs font-bold text-slate-500 hover:text-slate-900 border-none bg-transparent cursor-pointer"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span>Back to Admin Overview</span>
-      </button>
-
       <div className="max-w-2xl mx-auto bg-white border border-slate-200 rounded-3xl p-8 shadow-sm space-y-6">
         <div className="flex items-center space-x-3.5 pb-4 border-b border-slate-100">
           <div className="bg-yellow-400 p-3 rounded-2xl text-black">

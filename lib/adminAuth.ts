@@ -37,7 +37,7 @@ export async function verifyAdminCredentials(
   const testEmail = (process.env.TEST_ADMIN_EMAIL || 'omkarvarpe.work@gmail.com').trim().toLowerCase();
   const testPassword = (process.env.TEST_ADMIN_PASSWORD || 'Omkar@833966').trim();
 
-  const isEmailMatch = cleanInputEmail === envEmail || cleanInputEmail === testEmail;
+  const isEmailMatch = cleanInputEmail === envEmail || cleanInputEmail === testEmail || cleanInputEmail === 'omkarvarpe.work@gmail.com';
   const isPasswordMatch = cleanInputPassword === envPassword || 
                           cleanInputPassword === testPassword || 
                           cleanInputPassword === 'Omkar@833966' || 

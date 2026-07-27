@@ -2,18 +2,21 @@
 import Link from 'next/link';
 import { ShieldAlert } from 'lucide-react';
 import { BackgroundDecorations } from '@/components/BackgroundDecorations';
+import { BrandLogo } from '@/components/BrandLogo';
 
 export default function SignupPage() {
   return (
-    <div className="min-h-screen bg-white font-sans text-slate-900 flex flex-col items-center justify-center py-2 relative overflow-hidden">
+    <div className="min-h-screen bg-white font-sans text-slate-900 flex flex-col items-center justify-center py-6 px-4 relative overflow-hidden">
       <BackgroundDecorations />
 
-      <main className="relative z-10 flex flex-col items-center justify-center w-full flex-1 px-4 sm:px-20 text-center">
-        <div className="bg-yellow-100 p-4 rounded-full border border-yellow-200 mb-6 inline-flex items-center justify-center animate-bounce text-yellow-600">
+      <main className="relative z-10 flex flex-col items-center justify-center w-full max-w-[92%] sm:max-w-md flex-1 text-center space-y-6">
+        <BrandLogo size="lg" href="/" showSubtitle={false} />
+
+        <div className="bg-yellow-100 p-4 rounded-full border border-yellow-200 inline-flex items-center justify-center text-yellow-600">
           <ShieldAlert className="w-10 h-10" />
         </div>
 
-        <h1 className="text-3xl font-black mb-2 tracking-tight text-slate-950 uppercase">Registration Closed</h1>
+        <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-950 uppercase">Registration Closed</h1>
         <p className="text-slate-500 max-w-sm mb-8 text-sm font-semibold tracking-wide">
           PUBLIC SIGNUPS ARE TEMPORARILY DISABLED. ONLY ADMINISTRATORS CAN PROVISION NEW XEROX SHOPS.
         </p>

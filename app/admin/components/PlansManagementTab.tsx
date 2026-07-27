@@ -74,14 +74,6 @@ export const PlansManagementTab = ({
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <button
-        onClick={() => setActiveView('overview')}
-        className="inline-flex items-center space-x-2 text-xs font-bold text-slate-500 hover:text-slate-900 border-none bg-transparent cursor-pointer"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        <span>Back to Admin Overview</span>
-      </button>
-
       <div className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm space-y-6">
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
           <div className="flex items-center space-x-3">
@@ -257,21 +249,21 @@ export const PlansManagementTab = ({
                   ) : (
                     <div className="space-y-4 flex-1 flex flex-col justify-between">
                       <div>
-                        <div className="flex justify-between items-start">
+                        <div className="flex justify-between items-start flex-wrap gap-2 w-full">
                           <h3 className="font-extrabold text-slate-950 uppercase text-sm tracking-tight">{plan.name}</h3>
-                          <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded font-black">
+                          <span className="text-xs bg-yellow-100 text-yellow-800 px-2.5 py-1 rounded-lg font-black shrink-0">
                             ₹{plan.price}
                           </span>
                         </div>
                         <p className="text-[10px] text-slate-400 font-bold tracking-wider uppercase mt-0.5">
                           Duration: {plan.duration_months} Month{plan.duration_months > 1 ? 's' : ''}
                         </p>
-                        <p className="text-xs text-slate-500 mt-2 font-medium">
+                        <p className="text-xs text-slate-500 mt-2 font-medium leading-relaxed">
                           {plan.description || 'No description provided.'}
                         </p>
                       </div>
 
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-2 w-full pt-2">
                         <button 
                           onClick={() => startEditPlan(plan)}
                           className="flex-1 border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold py-2.5 rounded-xl text-xs transition flex justify-center items-center cursor-pointer bg-white"
@@ -282,7 +274,7 @@ export const PlansManagementTab = ({
                         
                         <button 
                           onClick={() => setPlanToDelete(plan)}
-                          className="p-2.5 border border-red-200 hover:bg-red-50 text-red-600 rounded-xl transition cursor-pointer bg-white"
+                          className="p-2.5 border border-red-200 hover:bg-red-50 text-red-600 rounded-xl transition cursor-pointer bg-white shrink-0"
                           title="Delete Plan"
                         >
                           <Trash2 className="w-4 h-4" />

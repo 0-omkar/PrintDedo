@@ -1,4 +1,4 @@
-export type ActiveView = 'overview' | 'register' | 'audit' | 'plans' | 'messages' | 'reviews';
+export type ActiveView = 'overview' | 'register' | 'audit' | 'plans' | 'messages' | 'reviews' | 'analytics';
 
 export interface PlatformReview {
   id: string;
@@ -41,6 +41,7 @@ export interface AdminMessage {
   contact_info: string;
   message: string;
   created_at: string;
+  is_read?: boolean;
 }
 
 export interface StorageMetrics {

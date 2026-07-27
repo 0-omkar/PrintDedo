@@ -10,6 +10,7 @@ export function useAdminViewModel() {
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const [activeView, setActiveView] = useState<ActiveView>('overview');
+  const [isAdminSidebarOpen, setIsAdminSidebarOpen] = useState(false);
 
   // Shop Management State
   const [shops, setShops] = useState<ShopItem[]>([]);
@@ -216,6 +217,16 @@ export function useAdminViewModel() {
     setIsAdminAuthenticated(false);
   };
 
+  const [readMessageIds, setReadMessageIds] = useState<string[]>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('printdedo_read_admin_messages');
+      if (stored) {
+        try { return JSON.parse(stored); } catch (e) {}
+      }
+    }
+    return [];
+  });
+
   const fetchAdminMessages = async () => {
     setLoadingMessages(true);
     try {
@@ -225,13 +236,18 @@ export function useAdminViewModel() {
         .order('created_at', { ascending: false });
 
       if (!error && data && data.length > 0) {
-        const formatted: AdminMessage[] = data.map((msg: any) => ({
-          id: msg.id ? String(msg.id) : Math.random().toString(),
-          name: msg.name || 'Anonymous',
-          contact_info: msg.contact_info || msg.contact || 'N/A',
-          message: msg.message || '',
-          created_at: msg.created_at ? new Date(msg.created_at).toLocaleString() : new Date().toLocaleString()
-        }));
+        const formatted: AdminMessage[] = data.map((msg: any) => {
+          const msgId = msg.id ? String(msg.id) : Math.random().toString();
+          const isRead = msg.is_read !== undefined && msg.is_read !== null ? Boolean(msg.is_read) : readMessageIds.includes(msgId);
+          return {
+            id: msgId,
+            name: msg.name || 'Anonymous',
+            contact_info: msg.contact_info || msg.contact || 'N/A',
+            message: msg.message || '',
+            created_at: msg.created_at ? new Date(msg.created_at).toLocaleString() : new Date().toLocaleString(),
+            is_read: isRead,
+          };
+        });
         setAdminMessages(formatted);
         setLoadingMessages(false);
         return;
@@ -243,7 +259,12 @@ export function useAdminViewModel() {
     const stored = localStorage.getItem('printdedo_admin_messages');
     if (stored) {
       try {
-        setAdminMessages(JSON.parse(stored));
+        const parsed = JSON.parse(stored);
+        const formatted = parsed.map((msg: any) => ({
+          ...msg,
+          is_read: msg.is_read || readMessageIds.includes(String(msg.id)),
+        }));
+        setAdminMessages(formatted);
       } catch (e) {
         setAdminMessages([]);
       }
@@ -252,6 +273,24 @@ export function useAdminViewModel() {
     }
     setLoadingMessages(false);
   };
+
+  useEffect(() => {
+    if (activeView === 'messages' && adminMessages.length > 0) {
+      const unreadMsgs = adminMessages.filter(m => !m.is_read && !readMessageIds.includes(m.id));
+      if (unreadMsgs.length > 0) {
+        const unreadIds = unreadMsgs.map(m => m.id);
+        const updatedReadIds = Array.from(new Set([...readMessageIds, ...unreadIds]));
+        setReadMessageIds(updatedReadIds);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('printdedo_read_admin_messages', JSON.stringify(updatedReadIds));
+        }
+        supabase.from('admin_messages').update({ is_read: true }).in('id', unreadIds).then(() => {}, () => {});
+        setAdminMessages(prev => prev.map(m => ({ ...m, is_read: true })));
+      }
+    }
+  }, [activeView, adminMessages, readMessageIds]);
+
+  const unreadMessagesCount = adminMessages.filter(m => !m.is_read && !readMessageIds.includes(m.id)).length;
 
   const handleDeleteAdminMessage = async (id: string) => {
     try {
@@ -800,5 +839,8 @@ export function useAdminViewModel() {
     handleSaveShopDetails,
     fetchShops,
     fetchPlans,
+    isAdminSidebarOpen,
+    setIsAdminSidebarOpen,
+    unreadMessagesCount,
   };
 }

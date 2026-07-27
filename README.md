@@ -105,6 +105,6 @@ Open [http://localhost:3000](http://localhost:3000) in your browser to view the 
 ## 👥 Founders
 
 - **Omkar Varpe** ([LinkedIn](https://www.linkedin.com/in/omkar-varpe-9704742a9/))
-- **Pradeep Biswas** ([LinkedIn](https://www.linkedin.com/in/pradeep-biswas-developer/))
-- **Yajan Mehta** ([LinkedIn](https://www.linkedin.com/in/yajan-mehta-9220442b2/))
 - **Siddhant Deshmukh** ([LinkedIn](https://www.linkedin.com/in/siddhant-deshmukh-0aa485344/))
+- **Yajan Mehta** ([LinkedIn](https://www.linkedin.com/in/yajan-mehta-9220442b2/))
+- **Pradeep Biswas** ([LinkedIn](https://www.linkedin.com/in/pradeep-biswas-developer/))
