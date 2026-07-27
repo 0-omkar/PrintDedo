@@ -239,14 +239,22 @@ export default function LoginPage() {
               <span className="h-px flex-1 bg-[#E8E8E8]" />OR<span className="h-px flex-1 bg-[#E8E8E8]" />
             </div>
 
-            <Link 
-              href="/contact-admin" 
-              className="flex h-14 w-full items-center justify-center gap-2 rounded-xl border border-[#E8E8E8] font-semibold text-[#08152D] transition duration-150 hover:border-[#F59E0B] hover:bg-[#FFFDF8] focus:outline-none focus:ring-4 focus:ring-[#F59E0B]/15"
-            >
-              <ShieldCheck className="h-5 w-5 text-[#F59E0B]" />
-              <span>Contact Admin</span>
-              <ChevronRight className="h-4 w-4 text-slate-400" />
-            </Link>
+            <div className="grid grid-cols-2 gap-3">
+              <Link 
+                href="/admin" 
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-amber-200/90 bg-amber-50/70 font-bold text-amber-950 transition duration-150 hover:border-amber-400 hover:bg-amber-100/90 focus:outline-none focus:ring-4 focus:ring-[#F59E0B]/15"
+              >
+                <ShieldCheck className="h-4.5 w-4.5 text-amber-600" />
+                <span className="text-xs font-black uppercase tracking-tight">Admin Login</span>
+              </Link>
+              <Link 
+                href="/contact-admin" 
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-[#E8E8E8] font-bold text-[#08152D] transition duration-150 hover:border-[#F59E0B] hover:bg-[#FFFDF8] focus:outline-none focus:ring-4 focus:ring-[#F59E0B]/15"
+              >
+                <Mail className="h-4.5 w-4.5 text-slate-500" />
+                <span className="text-xs font-black uppercase tracking-tight">Contact Admin</span>
+              </Link>
+            </div>
 
             <p className="mt-5 text-center text-sm text-[#5F6B7A]">
               Need help? <Link href="/contact-admin" className="font-medium text-[#F59E0B] hover:text-[#E88900] hover:underline">Contact your system administrator.</Link>

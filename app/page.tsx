@@ -99,6 +99,14 @@ export default function Home() {
           ) : (
             <>
               <Link
+                href="/admin"
+                className="px-4 py-2.5 text-sm font-bold text-slate-800 bg-amber-50/80 hover:bg-amber-100 border border-amber-200/90 rounded-2xl transition-all shadow-2xs flex items-center space-x-1.5 cursor-pointer"
+                title="Super Admin Portal"
+              >
+                <ShieldCheck className="w-4 h-4 text-amber-600" />
+                <span>Admin Portal</span>
+              </Link>
+              <Link
                 href="/login"
                 className="px-5 py-2.5 text-sm font-bold text-slate-900 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-2xl transition-all shadow-2xs flex items-center space-x-2 cursor-pointer"
               >
@@ -427,6 +435,8 @@ export default function Home() {
 
           <div className="flex items-center space-x-4 text-xs font-extrabold text-slate-500">
             <Link href="/login" className="hover:text-slate-900 transition">Shop Login</Link>
+            <span>•</span>
+            <Link href="/admin" className="hover:text-amber-600 text-slate-800 font-bold transition">Admin Portal</Link>
             <span>•</span>
             <Link href="/contact-admin" className="hover:text-slate-900 transition">Contact Admin</Link>
           </div>
