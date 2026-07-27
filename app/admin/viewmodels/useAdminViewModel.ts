@@ -152,6 +152,14 @@ export function useAdminViewModel() {
       setIsAdminAuthenticated(false);
     };
     checkAdminAuth();
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'printdedo_admin_token' && (!e.newValue || e.newValue === 'null')) {
+        setIsAdminAuthenticated(false);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
