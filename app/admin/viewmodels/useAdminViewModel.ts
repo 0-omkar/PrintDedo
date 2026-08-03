@@ -123,16 +123,7 @@ export function useAdminViewModel() {
 
   useEffect(() => {
     const checkAdminAuth = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession();
       const storedToken = localStorage.getItem('printdedo_admin_token');
-      
-      if (session && !error) {
-        setIsAdminAuthenticated(true);
-        fetchShops();
-        fetchPlans();
-        fetchAdminMessages();
-        return;
-      }
 
       if (storedToken) {
         try {
