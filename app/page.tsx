@@ -77,7 +77,7 @@ export default function Home() {
       <BackgroundDecorations />
 
       {/* Navigation Header */}
-      <nav className="relative z-30 flex items-center justify-between px-4 sm:px-6 lg:px-12 py-5 max-w-[1500px] mx-auto w-full select-none">
+      <nav className="fixed inset-x-0 top-0 z-40 flex items-center justify-between w-full px-4 sm:px-8 lg:px-12 py-3 bg-[#FFFDF8]/95 backdrop-blur-sm shadow-[0_2px_12px_rgba(15,23,42,0.05)] select-none">
         <BrandLogo size="lg" showSubtitle />
 
         {/* Navigation Links (Desktop) */}
@@ -138,9 +138,12 @@ export default function Home() {
         </div>
       </nav>
 
+      {/* Reserves the fixed header's height so hero content keeps its original position. */}
+      <div aria-hidden="true" className="h-[104px] sm:h-[112px] lg:h-[118px] shrink-0" />
+
       {/* Main Hero Section */}
-      <section className="relative z-20 pt-4 pb-12 lg:pt-8 lg:pb-16 max-w-[1500px] mx-auto px-6 lg:px-12 w-full">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-center">
+      <section className="relative z-20 pt-4 pb-12 lg:pt-8 lg:pb-16 max-w-[1740px] mx-auto px-6 lg:px-12 w-full">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 xl:gap-16 items-center">
 
           {/* Hero Left Content Column */}
           <div className="lg:col-span-5 text-left space-y-6">
@@ -229,7 +232,7 @@ export default function Home() {
 
           </div>
 
-          {/* Hero Right Composition (Layered Individual High-Res Images: MacBook + iPhone + QR Stand) */}
+          {/* Hero Right Composition */}
           <div className="lg:col-span-7 relative flex justify-center items-center select-none pt-6 lg:pt-0">
 
             {/* Recreated Golden Background Aura Curve & Dot Grid */}
@@ -240,42 +243,42 @@ export default function Home() {
               ))}
             </div>
 
-            {/* Layered Showcase Container matching Reference Image */}
-            <div className="relative w-full max-w-[950px] lg:max-w-[1050px] flex items-center justify-center pb-12 pt-4">
+            {/* Layered device showcase */}
+            <div className="relative w-full max-w-[950px] lg:max-w-none flex flex-col items-center pt-4 pb-8 lg:block lg:min-h-[560px] lg:pb-12">
 
-              {/* 1. Main MacBook Dashboard Image (Center Layer) */}
-              <div className="relative z-10 w-full max-w-[800px] lg:max-w-[920px]">
+              {/* 1. Main MacBook Dashboard Image (back layer) */}
+              <div className="relative z-10 w-[82%] sm:w-[76%] md:w-[80%] lg:absolute lg:-top-[3%] lg:left-1/2 lg:w-[94%] lg:-translate-x-1/2 xl:w-[96%]">
                 <Image
-                  src="/hero-macbook.png"
+                  src="/hero/hero-macbook.png"
                   alt="PrintDeDo Shop Owner Dashboard MacBook Mockup"
-                  width={1200}
-                  height={780}
+                  width={1536}
+                  height={1024}
+                  priority
+                  className="w-full h-auto object-contain drop-shadow-2xl pointer-events-none"
+                />
+              </div>
+
+              {/* 2. QR Stand Image (middle layer) */}
+              <div className="relative z-20 -mt-12 mr-[42%] w-[43%] sm:-mt-16 sm:mr-[46%] sm:w-[34%] md:w-[32%] lg:absolute lg:-bottom-[9%] lg:-left-[30%] lg:mt-0 lg:mr-0 lg:w-[68%] xl:-left-[15%] xl:w-[47%]">
+                <Image
+                  src="/hero/hero-qr.png"
+                  alt="PrintDeDo Scan to Print QR Stand Mockup"
+                  width={1536}
+                  height={1024}
+                  priority
+                  className="w-full h-auto object-contain drop-shadow-2xl pointer-events-none"
+                />
+              </div>
+
+              {/* 3. Mobile Image (front layer) */}
+              <div className="relative z-30 -mt-24 ml-[19%] w-[28%] sm:-mt-32 sm:ml-[42%] sm:w-[24%] md:w-[22%] lg:absolute lg:-bottom-[1%] lg:-right-[-8%] lg:mt-0 lg:ml-0 lg:w-[22%] xl:w-[18%]">
+                <Image
+                  src="/hero/hero-mobile.png"
+                  alt="PrintDeDo Customer Dropbox iPhone Mockup"
+                  width={344}
+                  height={725}
                   priority
                   className="w-full h-auto object-contain drop-shadow-xl pointer-events-none"
-                />
-              </div>
-
-              {/* 2. QR Stand Image (Overlapping Bottom Left) */}
-              <div className="absolute -bottom-2 left-[-4%] sm:left-[4%] lg:left-[3%] z-20 w-[170px] sm:w-[220px] lg:w-[260px]">
-                <Image
-                  src="/hero-qr-stand.png"
-                  alt="PrintDeDo Scan to Print QR Stand Mockup"
-                  width={500}
-                  height={620}
-                  priority
-                  className="w-full h-auto object-contain drop-shadow-2xl pointer-events-none hover:scale-105 transition-transform duration-300"
-                />
-              </div>
-
-              {/* 3. iPhone Image (Overlapping Bottom Right) */}
-              <div className="absolute -bottom-0 right-[0%] sm:right-[2%] lg:right-[4%] z-20 w-[220px] sm:w-[300px] lg:w-[350px]">
-                <Image
-                  src="/hero-iphone.png"
-                  alt="PrintDeDo Customer Dropbox iPhone Mockup"
-                  width={550}
-                  height={1100}
-                  priority
-                  className="w-full h-auto object-contain drop-shadow-2xl pointer-events-none hover:scale-105 transition-transform duration-300"
                 />
               </div>
 
@@ -286,7 +289,7 @@ export default function Home() {
         </div>
 
         {/* Bottom Trust Features Banner Strip */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 max-w-6xl mx-auto mt-14 p-4 sm:p-5 bg-white border border-slate-200/90 rounded-3xl shadow-xs text-left">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 max-w-[1500px] mx-auto mt-12 lg:mt-10 p-5 sm:p-6 bg-white border border-slate-200/90 rounded-3xl shadow-xs text-left">
           <div className="flex items-center space-x-3 p-2">
             <div className="w-9 h-9 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 shrink-0">
               <ShieldCheck className="w-5 h-5" />
