@@ -65,8 +65,8 @@ export const Sidebar = ({
   const sidebarBody = (
     <>
       {/* Side Panel Header */}
-      <div className="p-5 border-b border-slate-200 flex items-center justify-between">
-        <span className="text-sm font-black text-slate-900 uppercase tracking-wider">Shop Menu</span>
+      <div className="p-4 sm:p-5 border-b border-slate-200 flex items-center justify-between">
+        <BrandLogo size="lg" href="/" />
         {onCloseMobile && (
           <button
             type="button"
