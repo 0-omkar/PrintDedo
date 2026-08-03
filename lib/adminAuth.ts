@@ -1,6 +1,43 @@
 'use server';
 
+import crypto from 'crypto';
+
 const failedAttemptsMap = new Map<string, { count: number; lastAttempt: number }>();
+const SECRET_KEY = process.env.ADMIN_PASSWORD || process.env.SUPABASE_SERVICE_ROLE_KEY || 'printdedo_admin_secret_key_2026';
+
+export async function generateAdminToken(email: string): Promise<string> {
+  const timestamp = Date.now();
+  const cleanEmail = email.trim().toLowerCase();
+  const data = `${cleanEmail}:${timestamp}`;
+  const hmac = crypto.createHmac('sha256', SECRET_KEY).update(data).digest('hex');
+  return `${timestamp}.${cleanEmail}.${hmac}`;
+}
+
+export async function verifyAdminToken(token?: string): Promise<{ success: boolean; email?: string }> {
+  if (!token || typeof token !== 'string') return { success: false };
+  const parts = token.split('.');
+  if (parts.length !== 3) return { success: false };
+
+  const [timestampStr, email, hmac] = parts;
+  const timestamp = parseInt(timestampStr, 10);
+  if (isNaN(timestamp)) return { success: false };
+
+  // Check 24 hour expiration
+  if (Date.now() - timestamp > 24 * 60 * 60 * 1000) {
+    return { success: false };
+  }
+
+  const data = `${email}:${timestamp}`;
+  const expectedHmac = crypto.createHmac('sha256', SECRET_KEY).update(data).digest('hex');
+
+  try {
+    if (crypto.timingSafeEqual(Buffer.from(hmac), Buffer.from(expectedHmac))) {
+      return { success: true, email };
+    }
+  } catch (e) {}
+
+  return { success: false };
+}
 
 /**
  * Server Action for Admin Authentication with built-in Rate Limiting.
@@ -10,7 +47,7 @@ export async function verifyAdminCredentials(
   emailInput: string, 
   passwordInput: string,
   clientKey: string = 'global'
-): Promise<{ success: boolean; error?: string; rateLimited?: boolean }> {
+): Promise<{ success: boolean; token?: string; error?: string; rateLimited?: boolean }> {
   const now = Date.now();
   const record = failedAttemptsMap.get(clientKey) || { count: 0, lastAttempt: now };
 
@@ -45,7 +82,8 @@ export async function verifyAdminCredentials(
 
   if (isEmailMatch && isPasswordMatch) {
     failedAttemptsMap.delete(clientKey);
-    return { success: true };
+    const token = await generateAdminToken(cleanInputEmail);
+    return { success: true, token };
   }
 
   // Increment failed attempts

@@ -1,16 +1,19 @@
 import { NextResponse } from 'next/server';
-import { verifyAdminCredentials } from '@/lib/adminAuth';
+import { verifyAdminCredentials, verifyAdminToken } from '@/lib/adminAuth';
 import { getSupabaseAdmin } from '@/lib/supabaseServer';
 
 export async function DELETE(request: Request) {
   try {
     const authHeader = request.headers.get('x-admin-auth');
     const body = await request.json();
-    const { shopId, adminEmail, adminPassword } = body;
+    const { shopId, adminEmail, adminPassword, adminToken } = body;
 
     let isAuthorized = false;
 
-    if (adminEmail && adminPassword) {
+    if (adminToken) {
+      const tokenRes = await verifyAdminToken(adminToken);
+      isAuthorized = tokenRes.success;
+    } else if (adminEmail && adminPassword) {
       const authResult = await verifyAdminCredentials(adminEmail, adminPassword);
       isAuthorized = authResult.success;
     } else if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD && authHeader) {

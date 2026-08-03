@@ -7,6 +7,7 @@ export function useAdminViewModel() {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean | null>(null);
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
+  const [adminToken, setAdminToken] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const [activeView, setActiveView] = useState<ActiveView>('overview');
@@ -104,7 +105,7 @@ export function useAdminViewModel() {
           alternate_phone: editShopAlternatePhone.trim(),
           upi_id: editShopUpi.trim(),
         },
-        { adminEmail, adminPassword }
+        { adminEmail, adminPassword, adminToken }
       );
 
       if (res.success) {
@@ -131,6 +132,7 @@ export function useAdminViewModel() {
           // Check 24 hour session expiration
           if (parsed && parsed.authenticated && parsed.timestamp && (Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000)) {
             if (parsed.email) setAdminEmail(parsed.email);
+            if (parsed.token) setAdminToken(parsed.token);
             setIsAdminAuthenticated(true);
             fetchShops();
             fetchPlans();
@@ -163,10 +165,12 @@ export function useAdminViewModel() {
 
     // 1. Authenticate securely via Server Action
     try {
-      const { verifyAdminCredentials } = await import('@/lib/adminAuth');
+      const { verifyAdminCredentials, generateAdminToken } = await import('@/lib/adminAuth');
       const authResult = await verifyAdminCredentials(cleanInputEmail, cleanInputPassword);
       if (authResult.success) {
-        localStorage.setItem('printdedo_admin_token', JSON.stringify({ authenticated: true, email: cleanInputEmail, timestamp: Date.now() }));
+        const token = authResult.token || await generateAdminToken(cleanInputEmail);
+        setAdminToken(token);
+        localStorage.setItem('printdedo_admin_token', JSON.stringify({ authenticated: true, email: cleanInputEmail, token, timestamp: Date.now() }));
         setAdminPassword(''); // Wipe password state from memory
         setIsAdminAuthenticated(true);
         fetchShops();
@@ -186,7 +190,10 @@ export function useAdminViewModel() {
       });
 
       if (!error && data?.session) {
-        localStorage.setItem('printdedo_admin_token', JSON.stringify({ authenticated: true, email: cleanInputEmail, timestamp: Date.now() }));
+        const { generateAdminToken } = await import('@/lib/adminAuth');
+        const token = await generateAdminToken(cleanInputEmail);
+        setAdminToken(token);
+        localStorage.setItem('printdedo_admin_token', JSON.stringify({ authenticated: true, email: cleanInputEmail, token, timestamp: Date.now() }));
         setAdminPassword(''); // Wipe password state from memory
         setIsAdminAuthenticated(true);
         fetchShops();
@@ -205,6 +212,7 @@ export function useAdminViewModel() {
     await supabase.auth.signOut().catch(() => {});
     localStorage.removeItem('printdedo_admin_token');
     localStorage.removeItem('printdedo_admin_auth');
+    setAdminToken('');
     setIsAdminAuthenticated(false);
   };
 
@@ -286,7 +294,7 @@ export function useAdminViewModel() {
   const handleDeleteAdminMessage = async (id: string) => {
     try {
       const { deleteAdminMessageServer } = await import('@/lib/adminActions');
-      const res = await deleteAdminMessageServer(id, { adminEmail, adminPassword });
+      const res = await deleteAdminMessageServer(id, { adminEmail, adminPassword, adminToken });
       if (!res.success) {
         toast.error(res.error || 'Failed to delete message');
         return;
@@ -327,7 +335,7 @@ export function useAdminViewModel() {
 
     try {
       const { createSubscriptionPlanServer } = await import('@/lib/adminActions');
-      const res = await createSubscriptionPlanServer(newPlanObj, { adminEmail, adminPassword });
+      const res = await createSubscriptionPlanServer(newPlanObj, { adminEmail, adminPassword, adminToken });
       if (res.success) {
         fetchPlans();
       } else {
@@ -365,7 +373,7 @@ export function useAdminViewModel() {
 
     try {
       const { updateSubscriptionPlanServer } = await import('@/lib/adminActions');
-      const res = await updateSubscriptionPlanServer(planId, updatedObj, { adminEmail, adminPassword });
+      const res = await updateSubscriptionPlanServer(planId, updatedObj, { adminEmail, adminPassword, adminToken });
       if (res.success) {
         fetchPlans();
       } else {
@@ -384,7 +392,7 @@ export function useAdminViewModel() {
     setIsDeletingPlan(true);
     try {
       const { deleteSubscriptionPlanServer } = await import('@/lib/adminActions');
-      const res = await deleteSubscriptionPlanServer(planToDelete.id, { adminEmail, adminPassword });
+      const res = await deleteSubscriptionPlanServer(planToDelete.id, { adminEmail, adminPassword, adminToken });
       if (res.success) {
         fetchPlans();
       } else {
@@ -485,7 +493,8 @@ export function useAdminViewModel() {
           selected_plan_id: selectedPlan,
           custom_months: customMonths,
           adminEmail,
-          adminPassword
+          adminPassword,
+          adminToken
         })
       });
 
@@ -517,7 +526,7 @@ export function useAdminViewModel() {
       const response = await fetch('/api/admin/delete-shop', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ shopId: shopToDelete.id, adminEmail, adminPassword })
+        body: JSON.stringify({ shopId: shopToDelete.id, adminEmail, adminPassword, adminToken })
       });
 
       const resData = await response.json();
@@ -563,7 +572,7 @@ export function useAdminViewModel() {
     let serverSuccess = false;
     try {
       const { renewShopSubscriptionServer } = await import('@/lib/adminActions');
-      const res = await renewShopSubscriptionServer(activeRenewalShop.id, newExpiry.toISOString(), planName, { adminEmail, adminPassword });
+      const res = await renewShopSubscriptionServer(activeRenewalShop.id, newExpiry.toISOString(), planName, { adminEmail, adminPassword, adminToken });
       if (res.success) serverSuccess = true;
       else toast.error(res.error || 'Failed to update subscription');
     } catch (e: any) {
@@ -672,7 +681,7 @@ export function useAdminViewModel() {
   const handleDeletePlatformReview = async (id: string) => {
     try {
       const { deletePlatformReviewServer } = await import('@/lib/adminActions');
-      const res = await deletePlatformReviewServer(id, { adminEmail, adminPassword });
+      const res = await deletePlatformReviewServer(id, { adminEmail, adminPassword, adminToken });
       if (!res.success) {
         toast.error(res.error || 'Failed to delete review');
         return;
@@ -692,7 +701,7 @@ export function useAdminViewModel() {
   const handleReplyPlatformReview = async (id: string, reply: string) => {
     try {
       const { replyPlatformReviewServer } = await import('@/lib/adminActions');
-      const res = await replyPlatformReviewServer(id, reply, { adminEmail, adminPassword });
+      const res = await replyPlatformReviewServer(id, reply, { adminEmail, adminPassword, adminToken });
       if (!res.success) {
         toast.error(res.error || 'Failed to post reply');
         return;

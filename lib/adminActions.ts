@@ -1,21 +1,28 @@
 'use server';
 
-import { verifyAdminCredentials } from './adminAuth';
+import { verifyAdminCredentials, verifyAdminToken } from './adminAuth';
 import { getSupabaseAdmin } from './supabaseServer';
 
 interface AdminAuthPayload {
   adminEmail?: string;
   adminPassword?: string;
+  adminToken?: string;
 }
 
 /**
  * Strict server-side authorization check for Super-Admin actions.
- * Fails closed unless valid admin email and password are provided and verified.
+ * Fails closed unless valid admin token or credentials are provided and verified.
  */
 async function authorizeAdmin(payload?: AdminAuthPayload): Promise<boolean> {
-  if (payload && payload.adminEmail && payload.adminPassword) {
-    const res = await verifyAdminCredentials(payload.adminEmail, payload.adminPassword);
-    if (res.success) return true;
+  if (payload) {
+    if (payload.adminToken) {
+      const tokenRes = await verifyAdminToken(payload.adminToken);
+      if (tokenRes.success) return true;
+    }
+    if (payload.adminEmail && payload.adminPassword) {
+      const res = await verifyAdminCredentials(payload.adminEmail, payload.adminPassword);
+      if (res.success) return true;
+    }
   }
 
   return false;
